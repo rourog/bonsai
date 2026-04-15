@@ -4,8 +4,6 @@ import { MotorAudio } from './MotorAudio.js';
 import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js';
 import { Rama, rnd, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
 
-// --- 1. INICIALIZACIÓN DE CONTEXTO Y MOTORES ---
-
 const domContext = {
     layerPot: document.getElementById('layer-pot'),
     layerTree: document.getElementById('layer-tree'),
@@ -17,8 +15,6 @@ const audioMotor = new MotorAudio();
 const entornoMotor = new MotorEntorno(domContext);
 domContext.audioMotor = audioMotor;
 
-// --- 2. ESTADO GLOBAL DEL SIMULADOR ---
-
 let arbolBase = null;
 let animationFrameId = null;
 let iteracionGlobal = 0;
@@ -28,19 +24,16 @@ let isZenMode = false;
 let isAutoGrowing = false;
 let zenPausa = false;
 
-let wakeLock = null; // Control para mantener la pantalla encendida
+let wakeLock = null; 
 let idleTimeout = null;
 let showLeaves = true;
 let showFlowers = true;
 let audioIniciado = false;
 
-// Referencias a UI
 const statsDisplay = document.getElementById('stats');
 const btnZenMain = document.getElementById('btn-zen-main');
 const dashboard = document.getElementById('dashboard');
 const btnAuto = document.getElementById('btn-auto');
-
-// --- 3. CONSTRUCTOR DE INTERFAZ DINÁMICA ---
 
 const ESTADO_CICLICO = {}; 
 
@@ -48,7 +41,6 @@ function construirInterfaz() {
     const contenedorMorfologia = document.getElementById('ui-morfologia');
     const contenedorParametros = document.getElementById('ui-parametros');
 
-    // Construcción de Botones Cíclicos
     let htmlCiclicos = `<div class="grid-2">`;
     htmlCiclicos += crearBotonCiclico('p-maceta-forma', 'Maceta', DICCIONARIO_ENTORNO.macetas);
     htmlCiclicos += crearBotonCiclico('p-maceta-color', 'Color', DICCIONARIO_ENTORNO.esmaltes);
@@ -58,7 +50,6 @@ function construirInterfaz() {
     
     contenedorMorfologia.innerHTML = htmlCiclicos;
 
-    // Construcción de Sliders
     let htmlParams = '';
     PARAMETROS_MOTOR.forEach(param => {
         const isDecimal = param.step % 1 !== 0;
@@ -73,7 +64,6 @@ function construirInterfaz() {
     });
     contenedorParametros.innerHTML = htmlParams;
 
-    // Listeners para Botones Cíclicos
     ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
         const btn = document.getElementById(id);
         if(btn) {
@@ -90,7 +80,6 @@ function construirInterfaz() {
         }
     });
 
-    // Listeners para Sliders
     document.querySelectorAll('#ui-parametros input[type="range"]').forEach(input => {
         input.addEventListener('input', (e) => {
             const isDecimal = e.target.step % 1 !== 0;
@@ -105,8 +94,6 @@ function crearBotonCiclico(id, prefix, opciones) {
     ESTADO_CICLICO[id] = { index: 0, opciones, prefix }; 
     return `<button id="${id}" class="action-btn cyclic-btn" data-value="${opciones[0].id}">${prefix}: <span>${opciones[0].nombre}</span></button>`;
 }
-
-// --- 4. EXTRACCIÓN Y ACTUALIZACIÓN DE DATOS ---
 
 export function getParams() {
     const params = {
@@ -154,19 +141,13 @@ const updatePot = () => {
     }
 };
 
-// --- 5. CONTROL DE PANTALLA ACTIVA (WAKE LOCK API) ---
-
 async function solicitarWakeLock() {
     try {
         if ('wakeLock' in navigator) {
             wakeLock = await navigator.wakeLock.request('screen');
-            wakeLock.addEventListener('release', () => {
-                wakeLock = null;
-            });
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
         }
-    } catch (err) {
-        console.warn(`Wake Lock no disponible: ${err.message}`);
-    }
+    } catch (err) { }
 }
 
 function liberarWakeLock() {
@@ -182,23 +163,17 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
-// --- 6. LÓGICA DE EVENTOS (AUDIO, UI, ZEN) ---
-
+// --- SOLUCIÓN: ARRANQUE SEGURO DEL AUDIO ---
 function arrancarAudioSilencioso() {
     if(!audioIniciado) {
-        audioMotor.sfxEnabled = true;
-        audioMotor.musicEnabled = true;
-        
+        audioIniciado = true;
+        // En lugar de llamar funciones del motor directamente y arriesgar un crash,
+        // forzamos el clic en los botones para que la Interfaz haga el trabajo sucio.
         let btnSfx = document.getElementById('btn-sfx');
         let btnMus = document.getElementById('btn-music');
-        if(btnSfx) { btnSfx.classList.add('active-toggle'); btnSfx.innerHTML = "🍃 SFX: ON"; }
-        if(btnMus) { btnMus.classList.add('active-toggle'); btnMus.innerHTML = "🎵 MÚSICA: ON"; }
         
-        audioMotor.initCtx();
-        audioMotor.initWind();
-        if(isZenMode) audioMotor.resumeMusic();
-        
-        audioIniciado = true;
+        if (btnSfx && !btnSfx.classList.contains('active-toggle')) btnSfx.click();
+        if (btnMus && !btnMus.classList.contains('active-toggle')) btnMus.click();
     }
 }
 
@@ -210,7 +185,6 @@ function resetTimerIdle() {
     }, 5000);
 }
 
-// Interacción general para despertar UI y Audio
 window.addEventListener('mousemove', resetTimerIdle);
 window.addEventListener('touchstart', () => {
     arrancarAudioSilencioso();
@@ -221,11 +195,8 @@ window.addEventListener('click', () => {
     resetTimerIdle();
 });
 
-// Controles de Menú
 document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
 document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
-
-// Botones de Crecimiento
 document.getElementById('btn-reset').addEventListener('click', inicializarArbol);
 
 document.getElementById('btn-step').addEventListener('click', () => {
@@ -247,7 +218,6 @@ btnAuto.addEventListener('click', (e) => {
     }
 });
 
-// Alternadores de Capas
 document.getElementById('btn-hojas').addEventListener('click', (e) => { 
     showLeaves = !showLeaves; 
     e.target.classList.toggle('active-toggle', showLeaves); 
@@ -257,7 +227,6 @@ document.getElementById('btn-flores').addEventListener('click', (e) => {
     e.target.classList.toggle('active-toggle', showFlowers); 
 });
 
-// Botones de Entorno y Sonido
 document.getElementById('btn-sfx').addEventListener('click', (e) => {
     const activado = audioMotor.toggleSfx();
     e.target.classList.toggle('active-toggle', activado);
@@ -268,7 +237,6 @@ document.getElementById('btn-music').addEventListener('click', (e) => {
     const activado = audioMotor.toggleMusic();
     e.target.classList.toggle('active-toggle', activado);
     e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF";
-    if (activado && isZenMode) audioMotor.resumeMusic();
 });
 
 document.getElementById('btn-fondo').addEventListener('click', (e) => {
@@ -277,7 +245,6 @@ document.getElementById('btn-fondo').addEventListener('click', (e) => {
     e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF";
 });
 
-// Botón Maestro Zen
 btnZenMain.addEventListener('click', (e) => {
     e.stopPropagation(); 
     isZenMode = !isZenMode;
@@ -303,8 +270,6 @@ btnZenMain.addEventListener('click', (e) => {
         liberarWakeLock();
     }
 });
-
-// --- 7. PRESETS BOTÁNICOS ---
 
 const PRESETS_BOTANICOS = {
     pino:     { mForma: 'estandar', mColor: '#c05a41', viento: 10, length: 25, lenVar: 10, angle: 20, branch: 45, acc: 10, gen: 5, hojas: 5, flor: 8, forma: 'huso', flora: 'ninguno', edadRam: 3.5 }, 
@@ -362,8 +327,6 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
     inicializarArbol();
 });
 
-// --- 8. BUCLE PRINCIPAL DE ANIMACIÓN ---
-
 function bucleAnimacion() {
     tiempoViento += 0.016; 
     let paramsActuales = getParams();
@@ -413,7 +376,6 @@ function inicializarArbol() {
     bucleAnimacion();
 }
 
-// --- 9. ARRANQUE DEL SISTEMA ---
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     window.aplicarPreset('pino'); 

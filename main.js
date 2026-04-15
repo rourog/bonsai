@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR MEJORADO: MUERTE Y ASTILLAMIENTO ---
+// --- ORQUESTADOR MEJORADO: MUERTE Y ASTILLAMIENTO EN TIEMPO REAL ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -202,7 +202,7 @@ function iniciarMuerte(callbackRenacer) {
             x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -0.5,
             cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
             colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false,
-            // Guardamos la referencia original para extraer sus vectores
+            isBroken: false, // Candado para ejecutar la rotura visual solo al caer
             ramaRef: rama 
         };
 
@@ -240,40 +240,6 @@ function iniciarMuerte(callbackRenacer) {
                 ramasPorGen[g].forEach(r => {
                     r.fallTime = fallTimeCursor + Math.random() * 150;
                     ramasFlat.push(r);
-                    
-                    // --- REESCULTURA VECTORIAL: ASTILLAS FILOSAS ---
-                    let ref = r.ramaRef;
-                    let dx = ref.endXAct - ref.startX;
-                    let dy = ref.endYAct - ref.startY;
-                    let len = Math.hypot(dx, dy);
-                    
-                    if (len > 0) {
-                        let nx = -dy / len;
-                        let ny = dx / len;
-                        
-                        // 1. Hacemos la rama 60% más delgada
-                        let rBase = (ref.grosorBaseAct / 2) * 0.6; 
-                        
-                        let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase;
-                        let bx2 = ref.startX - nx * rBase; let by2 = ref.startY - ny * rBase;
-                        
-                        // 2. La forzamos a terminar en una punta afilada perfecta
-                        let px = ref.endXAct; let py = ref.endYAct;
-                        
-                        // 3. Calculamos puntos dentados aleatorios en el medio del recorrido
-                        let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*3.5;
-                        let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*3.5;
-                        
-                        let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*3.5;
-                        let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*3.5;
-
-                        // 4. Trazamos polígonos con líneas duras (L) en lugar de curvas bézier (Q)
-                        let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px} ${py} L ${j1x - nx*rBase} ${j1y - ny*rBase} L ${bx2} ${by2} Z`;
-                        r.path.setAttribute("d", sharpPath);
-                        
-                        // 5. Apagamos las articulaciones esféricas para destruir la ilusión de redondez
-                        r.joints.forEach(j => j.style.display = 'none');
-                    }
                 });
                 fallTimeCursor += 500; 
                 
@@ -317,14 +283,42 @@ function iniciarMuerte(callbackRenacer) {
             }
         });
 
-        // FASE 2: ASTILLAS FILOSAS CAYENDO
+        // FASE 2: RAMAS ROMPIÉNDOSE Y CAYENDO
         ramasFlat.forEach(r => {
             if (elapsed > r.fallTime && r.dom.style.display !== 'none') {
                 completado = false;
                 let age = elapsed - r.fallTime;
+
+                // --- MAGIA VISUAL: ROMPER LA RAMA EN EL INSTANTE EXACTO DE CAÍDA ---
+                if (!r.isBroken) {
+                    r.isBroken = true;
+                    let ref = r.ramaRef;
+                    let dx = ref.endXAct - ref.startX;
+                    let dy = ref.endYAct - ref.startY;
+                    let len = Math.hypot(dx, dy);
+                    
+                    if (len > 0) {
+                        let nx = -dy / len;
+                        let ny = dx / len;
+                        let rBase = (ref.grosorBaseAct / 2) * 0.6; // Adelgaza al romperse
+                        
+                        let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase;
+                        let bx2 = ref.startX - nx * rBase; let by2 = ref.startY - ny * rBase;
+                        let px = ref.endXAct; let py = ref.endYAct;
+                        
+                        let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*3.5;
+                        let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*3.5;
+                        let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*3.5;
+                        let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*3.5;
+
+                        let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px} ${py} L ${j1x - nx*rBase} ${j1y - ny*rBase} L ${bx2} ${by2} Z`;
+                        r.path.setAttribute("d", sharpPath);
+                        r.joints.forEach(j => j.style.display = 'none');
+                    }
+                }
                 
                 if (!r.tocandoSuelo) {
-                    r.vy += 0.6; // Gravedad más pesada para la madera
+                    r.vy += 0.6; 
                     r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
                     if (r.y + r.cy > groundY) {
                         r.y = groundY - r.cy;

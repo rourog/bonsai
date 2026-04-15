@@ -2,7 +2,7 @@
 
 import { MotorAudio } from './MotorAudio.js';
 import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js';
-import { Rama, rnd, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
+import { Rama, rnd, setSeed, seededRandom, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
 
 const domContext = {
     layerPot: document.getElementById('layer-pot'),
@@ -23,6 +23,8 @@ let tiempoViento = 0;
 let isZenMode = false;
 let isAutoGrowing = false;
 let zenPausa = false;
+let isDying = false; // Control de la animación de muerte
+let deathFrameId = null;
 
 let wakeLock = null; 
 let idleTimeout = null;
@@ -141,6 +143,185 @@ const updatePot = () => {
     }
 };
 
+// --- ORQUESTADOR: EL OCASO DEL BONSÁI ---
+function iniciarMuerte(callbackRenacer) {
+    if (!arbolBase || isDying) {
+        if (callbackRenacer) callbackRenacer();
+        return;
+    }
+    
+    isDying = true;
+    zenPausa = true;
+
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+
+    let hojasF = []; 
+    let ramas1 = []; 
+    let ramas2 = []; 
+    let tronco = []; 
+
+    let maxGen = getParams().maxGen;
+
+    // Escáner recursivo para extraer todos los componentes SVG
+    function clasificar(rama) {
+        rama.brotes.forEach(b => {
+            b.hojas.forEach(h => {
+                let tr = h.dom.getAttribute('transform');
+                if(tr) {
+                    // Magia de Regex para robar las coordenadas absolutas actuales
+                    let m = tr.match(/translate\(([^,]+),\s*([^)]+)\)\s*rotate\(([^)]+)\)\s*scale\(([^)]+)\)/);
+                    if(m) {
+                        hojasF.push({
+                            dom: h.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
+                            vx: (Math.random() - 0.5) * 3, vy: Math.random() * -1 - 1 // Brinco inicial
+                        });
+                    }
+                }
+            });
+            b.tallo.style.display = 'none'; // Desaparece los tallos
+        });
+
+        rama.flora.forEach(f => {
+            let tr = f.dom.getAttribute('transform');
+            if(tr) {
+                let m = tr.match(/translate\(([^,]+),\s*([^)]+)\)\s*rotate\(([^)]+)\)\s*scale\(([^)]+)\)/);
+                if(m) {
+                    hojasF.push({
+                        dom: f.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
+                        vx: (Math.random() - 0.5) * 2, vy: Math.random() * -2 - 1
+                    });
+                }
+            }
+        });
+
+        let obj = {
+            dom: rama.g,
+            path: rama.path,
+            joints: [rama.jointBase, rama.jointTip],
+            x: 0, y: 0, rot: 0,
+            vx: (Math.random() - 0.5) * 2,
+            vy: Math.random() * -2 - 1,
+            cx: rama.startX + (rama.endXAct - rama.startX)/2,
+            cy: rama.startY + (rama.endYAct - rama.startY)/2,
+            colorOriginal: rama.currentFill
+        };
+
+        if (rama.gen >= maxGen - 2) ramas1.push(obj);
+        else if (rama.gen >= maxGen - 4) ramas2.push(obj);
+        else tronco.push(obj);
+
+        rama.hijos.forEach(clasificar);
+    }
+
+    clasificar(arbolBase);
+    arbolBase = null; 
+    
+    let startTime = performance.now();
+    let groundY = 25; // Coordenada Y aproximada de la maceta en SVG
+    
+    // Inyectar drama acústico
+    if (audioMotor.sfxEnabled) {
+        audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime);
+        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 800);
+        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 1600);
+    }
+
+    function loopMuerte(now) {
+        let elapsed = now - startTime;
+        let completado = true;
+        
+        // FASE 1: Hojas y Flores cayendo (inmediato)
+        hojasF.forEach(p => {
+            if (p.y < groundY + 15) {
+                p.vy += 0.08; // Vaivén de hoja seca
+                p.vx += Math.sin(now * 0.005 + p.y) * 0.05; 
+                p.vx *= 0.92; 
+                p.vy *= 0.95;
+                
+                p.x += p.vx; p.y += p.vy; p.rot += p.vx * 3;
+
+                let op = 1;
+                if (p.y > groundY - 20) op = Math.max(0, (groundY + 15 - p.y) / 35); // Fade antes de tocar
+                
+                p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
+                p.dom.setAttribute('opacity', op);
+                if (op > 0) completado = false;
+            } else {
+                p.dom.style.display = 'none';
+            }
+        });
+
+        // FASES 2 y 3: Caída y rebote de Ramas
+        function animarRamas(ramas, startDelay) {
+            if (elapsed > startDelay) {
+                ramas.forEach(r => {
+                    if (r.y < groundY || Math.abs(r.vy) > 0.2 || Math.abs(r.vx) > 0.2) {
+                        r.vy += 0.4; 
+                        r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5; 
+
+                        if (r.y + r.cy > groundY) { // Rebote físico contra el suelo
+                            r.y = groundY - r.cy;
+                            r.vy *= -0.4; r.vx *= 0.6;
+                            let targetRot = (r.rot > 0) ? 90 : -90; // Tiende a acostarse horizontal
+                            r.rot += (targetRot - r.rot) * 0.08;
+                        }
+
+                        let op = parseFloat(r.dom.getAttribute('opacity') || 1);
+                        if (r.y + r.cy > groundY - 2 && Math.abs(r.vy) < 1.5) {
+                            op = Math.max(0, op - 0.04);
+                            r.dom.setAttribute('opacity', op);
+                        }
+
+                        r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
+                        if (op > 0) completado = false;
+                        else r.dom.style.display = 'none';
+                    }
+                });
+            } else completado = false;
+        }
+
+        animarRamas(ramas1, 600);
+        animarRamas(ramas2, 1400);
+
+        // FASE 4: Necrosis del Tronco y Fade Out Rápido
+        if (elapsed > 2000) {
+            let pProgreso = Math.min(1, (elapsed - 2000) / 1500); 
+            tronco.forEach(r => {
+                let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                if (match) {
+                    let rFill = Math.max(10, match[1] * (1 - pProgreso));
+                    let gFill = Math.max(10, match[2] * (1 - pProgreso));
+                    let bFill = Math.max(10, match[3] * (1 - pProgreso));
+                    let newColor = `rgb(${rFill},${gFill},${bFill})`; // Se acerca a negro #0A0A0A
+                    r.path.setAttribute('fill', newColor);
+                    r.joints.forEach(j => j.setAttribute('fill', newColor));
+                }
+                
+                if (pProgreso > 0.6) { // Fade out agresivo al final
+                    let op = 1 - ((pProgreso - 0.6) * 2.5);
+                    r.dom.setAttribute('opacity', Math.max(0, op));
+                    if (op <= 0) r.dom.style.display = 'none';
+                }
+                if (pProgreso < 1) completado = false;
+            });
+        } else completado = false;
+
+        if (!completado) {
+            deathFrameId = requestAnimationFrame(loopMuerte);
+        } else {
+            isDying = false;
+            if (callbackRenacer) callbackRenacer(); // Llama a plantar de nuevo
+        }
+    }
+    
+    deathFrameId = requestAnimationFrame(loopMuerte);
+}
+// ---------------------------------------------
+
+
 async function solicitarWakeLock() {
     try {
         if ('wakeLock' in navigator) {
@@ -168,7 +349,6 @@ function arrancarAudioSilencioso() {
         audioIniciado = true;
         let btnSfx = document.getElementById('btn-sfx');
         let btnMus = document.getElementById('btn-music');
-        
         if (btnSfx && !btnSfx.classList.contains('active-toggle')) btnSfx.click();
         if (btnMus && !btnMus.classList.contains('active-toggle')) btnMus.click();
     }
@@ -194,7 +374,13 @@ window.addEventListener('click', () => {
 
 document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
 document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
-document.getElementById('btn-reset').addEventListener('click', inicializarArbol);
+
+
+// --- MODIFICADO: CONEXIÓN DE BOTONES CON LA ANIMACIÓN Y SEMILLAS ---
+document.getElementById('btn-reset').addEventListener('click', () => {
+    if(isDying) return;
+    iniciarMuerte(inicializarArbol);
+});
 
 document.getElementById('btn-step').addEventListener('click', () => {
     if(arbolBase && iteracionGlobal <= 18) {
@@ -215,31 +401,45 @@ btnAuto.addEventListener('click', (e) => {
     }
 });
 
-document.getElementById('btn-hojas').addEventListener('click', (e) => { 
-    showLeaves = !showLeaves; 
-    e.target.classList.toggle('active-toggle', showLeaves); 
-});
-document.getElementById('btn-flores').addEventListener('click', (e) => { 
-    showFlowers = !showFlowers; 
-    e.target.classList.toggle('active-toggle', showFlowers); 
-});
+document.getElementById('btn-hojas').addEventListener('click', (e) => { showLeaves = !showLeaves; e.target.classList.toggle('active-toggle', showLeaves); });
+document.getElementById('btn-flores').addEventListener('click', (e) => { showFlowers = !showFlowers; e.target.classList.toggle('active-toggle', showFlowers); });
+document.getElementById('btn-sfx').addEventListener('click', (e) => { const activado = audioMotor.toggleSfx(); e.target.classList.toggle('active-toggle', activado); e.target.innerHTML = activado ? "🍃 SFX: ON" : "🍃 SFX: OFF"; });
+document.getElementById('btn-music').addEventListener('click', (e) => { const activado = audioMotor.toggleMusic(); e.target.classList.toggle('active-toggle', activado); e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF"; });
+document.getElementById('btn-fondo').addEventListener('click', (e) => { const activado = entornoMotor.toggleSky(); e.target.classList.toggle('active-toggle', activado); e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF"; });
 
-document.getElementById('btn-sfx').addEventListener('click', (e) => {
-    const activado = audioMotor.toggleSfx();
-    e.target.classList.toggle('active-toggle', activado);
-    e.target.innerHTML = activado ? "🍃 SFX: ON" : "🍃 SFX: OFF";
-});
-
-document.getElementById('btn-music').addEventListener('click', (e) => {
-    const activado = audioMotor.toggleMusic();
-    e.target.classList.toggle('active-toggle', activado);
-    e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF";
-});
-
-document.getElementById('btn-fondo').addEventListener('click', (e) => {
-    const activado = entornoMotor.toggleSky();
-    e.target.classList.toggle('active-toggle', activado);
-    e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF";
+document.getElementById('btn-mutar').addEventListener('click', () => {
+    if (isDying) return;
+    
+    // Inicia la muerte, y al terminar, cambia los settings y renace
+    iniciarMuerte(() => {
+        const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
+        const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
+        const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
+        const tFlora = DICCIONARIO_BOTANICO.flora[Math.floor(Math.random() * DICCIONARIO_BOTANICO.flora.length)].id;
+        
+        actualizarUI('p-maceta-forma', fMaceta);
+        actualizarUI('p-maceta-color', cMaceta);
+        actualizarUI('p-forma', fHoja);
+        actualizarUI('p-flora', tFlora);
+        
+        actualizarUI('p-viento', Math.floor(rnd(10, 80)));
+        actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1));
+        actualizarUI('p-length', Math.floor(rnd(10, 25)));
+        actualizarUI('p-lenVar', Math.floor(rnd(0, 80)));
+        actualizarUI('p-angle', Math.floor(rnd(15, 75)));
+        actualizarUI('p-branch', Math.floor(rnd(40, 90)));
+        actualizarUI('p-acc', Math.floor(rnd(10, 60)));
+        actualizarUI('p-gen', Math.floor(rnd(4, 7)));
+        actualizarUI('p-hojas', Math.floor(rnd(5, 25)));
+        actualizarUI('p-flor', Math.floor(rnd(3, 8)));
+        
+        // Generar nueva semilla en la UI y disparar
+        let inputSemilla = document.getElementById('input-semilla');
+        if(inputSemilla) inputSemilla.value = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        updatePot();
+        inicializarArbol();
+    });
 });
 
 btnZenMain.addEventListener('click', (e) => {
@@ -278,51 +478,31 @@ const PRESETS_BOTANICOS = {
 };
 
 window.aplicarPreset = function(tipo) {
-    const p = PRESETS_BOTANICOS[tipo];
-    actualizarUI('p-maceta-forma', p.mForma);
-    actualizarUI('p-maceta-color', p.mColor);
-    actualizarUI('p-forma', p.forma);
-    actualizarUI('p-flora', p.flora);
-    actualizarUI('p-viento', p.viento);
-    actualizarUI('p-edadRam', p.edadRam);
-    actualizarUI('p-length', p.length);
-    actualizarUI('p-lenVar', p.lenVar);
-    actualizarUI('p-angle', p.angle);
-    actualizarUI('p-branch', p.branch);
-    actualizarUI('p-acc', p.acc);
-    actualizarUI('p-gen', p.gen);
-    actualizarUI('p-hojas', p.hojas);
-    actualizarUI('p-flor', p.flor);
-    
-    updatePot();
-    inicializarArbol();
+    if(isDying) return;
+    iniciarMuerte(() => {
+        const p = PRESETS_BOTANICOS[tipo];
+        actualizarUI('p-maceta-forma', p.mForma);
+        actualizarUI('p-maceta-color', p.mColor);
+        actualizarUI('p-forma', p.forma);
+        actualizarUI('p-flora', p.flora);
+        actualizarUI('p-viento', p.viento);
+        actualizarUI('p-edadRam', p.edadRam);
+        actualizarUI('p-length', p.length);
+        actualizarUI('p-lenVar', p.lenVar);
+        actualizarUI('p-angle', p.angle);
+        actualizarUI('p-branch', p.branch);
+        actualizarUI('p-acc', p.acc);
+        actualizarUI('p-gen', p.gen);
+        actualizarUI('p-hojas', p.hojas);
+        actualizarUI('p-flor', p.flor);
+        
+        let inputSemilla = document.getElementById('input-semilla');
+        if(inputSemilla) inputSemilla.value = tipo.toUpperCase() + "-" + Math.floor(Math.random()*99);
+        
+        updatePot();
+        inicializarArbol();
+    });
 }
-
-document.getElementById('btn-mutar').addEventListener('click', () => {
-    const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
-    const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
-    const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
-    const tFlora = DICCIONARIO_BOTANICO.flora[Math.floor(Math.random() * DICCIONARIO_BOTANICO.flora.length)].id;
-    
-    actualizarUI('p-maceta-forma', fMaceta);
-    actualizarUI('p-maceta-color', cMaceta);
-    actualizarUI('p-forma', fHoja);
-    actualizarUI('p-flora', tFlora);
-    
-    actualizarUI('p-viento', Math.floor(rnd(10, 80)));
-    actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1));
-    actualizarUI('p-length', Math.floor(rnd(10, 25)));
-    actualizarUI('p-lenVar', Math.floor(rnd(0, 80)));
-    actualizarUI('p-angle', Math.floor(rnd(15, 75)));
-    actualizarUI('p-branch', Math.floor(rnd(40, 90)));
-    actualizarUI('p-acc', Math.floor(rnd(10, 60)));
-    actualizarUI('p-gen', Math.floor(rnd(4, 7)));
-    actualizarUI('p-hojas', Math.floor(rnd(5, 25)));
-    actualizarUI('p-flor', Math.floor(rnd(3, 8)));
-    
-    updatePot();
-    inicializarArbol();
-});
 
 function bucleAnimacion() {
     tiempoViento += 0.016; 
@@ -339,7 +519,8 @@ function bucleAnimacion() {
         if (iteracionGlobal > 18) {
             zenPausa = true;
             if(isZenMode) {
-                setTimeout(() => { if(isZenMode) { document.getElementById('btn-mutar').click(); } }, 4000); 
+                // MODIFICADO: El Zen automático ahora lanza la animación en lugar de reescribir de golpe
+                setTimeout(() => { if(isZenMode) document.getElementById('btn-mutar').click(); }, 2000); 
             } else {
                 isAutoGrowing = false;
                 btnAuto.classList.remove('active-toggle');
@@ -365,6 +546,22 @@ function inicializarArbol() {
         animationFrameId = null;
     }
     
+    // --- LECTURA DE LA SEMILLA PARA PRNG ---
+    let inputSemilla = document.getElementById('input-semilla');
+    if (inputSemilla) {
+        let textoSemilla = inputSemilla.value.trim().toUpperCase();
+        if (!textoSemilla) {
+            textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase();
+            inputSemilla.value = textoSemilla;
+        }
+        setSeed(textoSemilla);
+        
+        // Actualiza URL silenciosamente
+        const url = new URL(window.location);
+        url.searchParams.set('seed', textoSemilla);
+        window.history.replaceState({}, '', url);
+    }
+    
     arbolBase = new Rama(0, 0, 0, -90, null, getParams(), domContext);
     iteracionGlobal = 0;
     zenPausa = false;
@@ -375,6 +572,26 @@ function inicializarArbol() {
 
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
+    
+    // Lector de Semilla compartida en la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const semillaURL = urlParams.get('seed');
+    let inputSemilla = document.getElementById('input-semilla');
+    if (semillaURL && inputSemilla) {
+        inputSemilla.value = semillaURL.toUpperCase();
+    }
+
+    // Configuración del botón copiar enlace
+    let btnCopiar = document.getElementById('btn-copiar-semilla');
+    if (btnCopiar) {
+        btnCopiar.addEventListener('click', () => {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                btnCopiar.innerHTML = "✓";
+                setTimeout(() => btnCopiar.innerHTML = "🔗", 2000);
+            });
+        });
+    }
+
     window.aplicarPreset('pino'); 
     
     isZenMode = true;
@@ -385,7 +602,6 @@ window.addEventListener('DOMContentLoaded', () => {
     btnAuto.classList.add('active-toggle');
     btnAuto.innerHTML = "Auto-Crecer: ON";
 
-    // NUEVO: Enciende el fondo de cielo por defecto al cargar
     let btnFondo = document.getElementById('btn-fondo');
     if (btnFondo && !btnFondo.classList.contains('active-toggle')) {
         btnFondo.click();

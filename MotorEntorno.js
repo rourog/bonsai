@@ -1,4 +1,18 @@
-// MotorEntorno.js
+export const DICCIONARIO_ENTORNO = {
+    macetas: [
+        { id: 'estandar', nombre: 'Rectangular' },
+        { id: 'redonda', nombre: 'Tazón Suave' },
+        { id: 'alta', nombre: 'Alta Cascada' },
+        { id: 'plana', nombre: 'Plana Bosque' }
+    ],
+    esmaltes: [
+        { id: '#c05a41', nombre: 'Terracota' },
+        { id: '#2c3e50', nombre: 'Azul Cobalto' },
+        { id: '#34495e', nombre: 'Negro Mate' },
+        { id: '#8c8c91', nombre: 'Gris Concreto' },
+        { id: '#458b74', nombre: 'Verde Jade' }
+    ]
+};
 
 export class MotorEntorno {
     constructor(ctx) {

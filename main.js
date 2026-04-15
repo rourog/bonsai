@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR: MUERTE Y ASTILLAMIENTO DETALLADO ---
+// --- ORQUESTADOR MEJORADO: ASTILLADO TEMPRANO DEL TRONCO ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -203,7 +203,7 @@ function iniciarMuerte(callbackRenacer) {
             cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
             colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false,
             isBroken: false, 
-            isSplintered: false, // Candado para astillar el tronco
+            isSplintered: false, 
             ramaRef: rama 
         };
 
@@ -232,6 +232,7 @@ function iniciarMuerte(callbackRenacer) {
     let ramasFlat = [];
     let tronco = [];
     let fallTimeCursor = 2500; 
+    let primerQuiebreTime = 0; // Guardaremos el momento en que se rompe la primera rama
     
     for (let g = maxGenActual; g >= 0; g--) {
         if (ramasPorGen[g]) {
@@ -242,6 +243,10 @@ function iniciarMuerte(callbackRenacer) {
                     r.fallTime = fallTimeCursor + Math.random() * 150;
                     ramasFlat.push(r);
                 });
+                
+                // Si es la primera capa de ramas en caer, registramos el tiempo
+                if (primerQuiebreTime === 0) primerQuiebreTime = fallTimeCursor;
+
                 fallTimeCursor += 500; 
                 
                 if (audioMotor.sfxEnabled) {
@@ -251,6 +256,9 @@ function iniciarMuerte(callbackRenacer) {
             }
         }
     }
+    
+    // Si no había ramas extra para romper, que el tronco se astille tras las hojas
+    if (primerQuiebreTime === 0) primerQuiebreTime = 2500; 
     
     let trunkTime = fallTimeCursor + 400;
 
@@ -284,7 +292,7 @@ function iniciarMuerte(callbackRenacer) {
             }
         });
 
-        // FASE 2: RAMAS ROMPIÉNDOSE Y CAYENDO
+        // FASE 2: RAMAS CAYENDO
         ramasFlat.forEach(r => {
             if (elapsed > r.fallTime && r.dom.style.display !== 'none') {
                 completado = false;
@@ -340,64 +348,61 @@ function iniciarMuerte(callbackRenacer) {
             }
         });
 
-        // FASE 3: NECROSIS DEL TRONCO Y ASTILLADO DE PUNTAS
-        if (elapsed > trunkTime) {
-            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
-            tronco.forEach(r => {
-                if (r.dom.style.display !== 'none') {
-                    completado = false;
+        // FASE 3: ASTILLADO TEMPRANO Y NECROSIS DEL TRONCO
+        tronco.forEach(r => {
+            if (r.dom.style.display !== 'none') {
+                completado = false;
+                
+                // ASTILLADO TEMPRANO: Se rompen las puntas del tronco al caer la primera rama fina
+                if (elapsed > primerQuiebreTime && !r.isSplintered) {
+                    r.isSplintered = true;
+                    let ref = r.ramaRef;
+                    let dx = ref.endXAct - ref.startX;
+                    let dy = ref.endYAct - ref.startY;
+                    let len = Math.hypot(dx, dy);
                     
-                    // MAGIA VISUAL: Tallar el tronco sin perder su grosor
-                    if (!r.isSplintered) {
-                        r.isSplintered = true;
-                        let ref = r.ramaRef;
-                        let dx = ref.endXAct - ref.startX;
-                        let dy = ref.endYAct - ref.startY;
-                        let len = Math.hypot(dx, dy);
+                    if (len > 0) {
+                        let nxDir = dx / len; 
+                        let nyDir = dy / len;
                         
-                        if (len > 0) {
-                            let nxDir = dx / len; 
-                            let nyDir = dy / len;
+                        let currentD = r.path.getAttribute("d");
+                        let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
+                        let m = currentD.match(regex);
+                        
+                        if (m) {
+                            let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]);
+                            let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]);
+                            let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]);
+                            let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]);
+                            let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]);
+                            let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
                             
-                            let currentD = r.path.getAttribute("d");
-                            // Regex para capturar las coordenadas exactas de la curva Bézier
-                            let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
-                            let m = currentD.match(regex);
+                            let vtipX = px2 - px1;
+                            let vtipY = py2 - py1;
                             
-                            if (m) {
-                                let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]);
-                                let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]);
-                                let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]);
-                                let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]);
-                                let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]);
-                                let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
-                                
-                                let vtipX = px2 - px1;
-                                let vtipY = py2 - py1;
-                                
-                                let rFin = ref.grosorPuntaAct / 2;
-                                let spikeLen = rFin * 2.0; // Los picos se extienden en proporción al grosor de la rama
-                                
-                                // Creamos tres triángulos afilados en la punta plana
-                                let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                                let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                                
-                                let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
-                                let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
-                                
-                                let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                                let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                                
-                                // Reconstruimos el SVG fusionando las curvas gruesas con los picos filosos
-                                let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
-                                
-                                r.path.setAttribute("d", newD);
-                                r.joints[1].style.display = 'none'; // Apagamos la esfera de la punta
-                            }
+                            let rFin = ref.grosorPuntaAct / 2;
+                            let spikeLen = rFin * 2.0; 
+                            
+                            let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            
+                            let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
+                            let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                            
+                            let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            
+                            let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
+                            
+                            r.path.setAttribute("d", newD);
+                            r.joints[1].style.display = 'none'; 
                         }
                     }
+                }
 
-                    // Transición de color hacia el negro
+                // NECROSIS Y FADE OUT (Ocurre al final)
+                if (elapsed > trunkTime) {
+                    let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
                     let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                     if (match) {
                         let rFill = Math.max(15, match[1] * (1 - pProgreso));
@@ -405,7 +410,7 @@ function iniciarMuerte(callbackRenacer) {
                         let bFill = Math.max(15, match[3] * (1 - pProgreso));
                         let newColor = `rgb(${rFill},${gFill},${bFill})`; 
                         r.path.setAttribute('fill', newColor);
-                        r.joints[0].setAttribute('fill', newColor); // Solo oscurecemos la junta base, la punta ya no existe
+                        r.joints[0].setAttribute('fill', newColor); 
                     }
                     
                     if (elapsed > trunkTime + 1000) {
@@ -414,10 +419,8 @@ function iniciarMuerte(callbackRenacer) {
                         if (opFinal <= 0) r.dom.style.display = 'none';
                     }
                 }
-            });
-        } else {
-            if (tronco.length > 0) completado = false; 
-        }
+            }
+        });
 
         if (!completado) {
             deathFrameId = requestAnimationFrame(loopMuerte);

@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bonsái Paramétrico - UX Mejorada</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Bonsái Paramétrico - Experiencia Zen Completa</title>
     <style>
         :root {
             --bg-color: #f5f5f7;
@@ -13,9 +13,11 @@
         }
         body, html { margin: 0; padding: 0; width: 100%; height: 100vh; background-color: var(--bg-color); font-family: 'SF Mono', 'Roboto Mono', Menlo, monospace; overflow: hidden; transition: background-color 1s ease; }
         
+        /* --- FONDO CIELO --- */
         #sky-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, #a1c4fd 0%, #ffffff 80%); opacity: 0; transition: opacity 1s ease; z-index: 0; pointer-events: none; }
         body.bg-sky-active #sky-bg { opacity: 1; }
         
+        /* --- CONTENEDORES PRINCIPALES --- */
         #app-container { display: flex; flex-direction: row; width: 100%; height: 100vh; position: relative; z-index: 1; }
         #canvas-container { flex-grow: 1; position: relative; height: 100vh; display: flex; justify-content: center; align-items: center; transition: padding 0.5s ease; }
         svg { width: 100%; height: 100%; display: block; z-index: 2; position: relative;}
@@ -24,9 +26,12 @@
         .brote-activo { cursor: crosshair; } .brote-activo:hover path { fill: #e67e22 !important; }
         .flora-activa { cursor: crosshair; } .flora-activa:hover path { fill: #e74c3c !important; }
         
-        /* --- UI FLOTANTE CON ANIMACIÓN DE INACTIVIDAD (5s) --- */
+        /* --- UI FLOTANTE MINIMALISTA (CORREGIDO PARA MÓVILES) --- */
         #floating-ui { 
-            position: absolute; bottom: 30px; left: 25px; right: 25px; 
+            position: absolute; 
+            /* Aumentamos a 60px y añadimos el safe-area para protegerlo de la barra de Android/iOS */
+            bottom: max(60px, env(safe-area-inset-bottom)); 
+            left: 25px; right: 25px; 
             display: flex; justify-content: space-between; align-items: flex-end; 
             z-index: 10; pointer-events: none; 
             transition: opacity 0.5s ease, transform 0.5s ease; 
@@ -34,10 +39,7 @@
         }
         #floating-ui > * { pointer-events: auto; }
         
-        /* Oculta los botones flotantes en modo Zen cuando hay inactividad */
-        body.zen-active.zen-idle #floating-ui { 
-            opacity: 0; pointer-events: none; transform: translateY(20px); 
-        }
+        body.zen-active.zen-idle #floating-ui { opacity: 0; pointer-events: none; transform: translateY(20px); }
 
         .btn-zen-main { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%); color: white; font-size: 0.9rem; font-weight: bold; font-family: inherit; letter-spacing: 1px; border: none; box-shadow: 0 4px 15px rgba(102, 166, 255, 0.4); cursor: pointer; display: flex; justify-content: center; align-items: center; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s; position: relative; overflow: hidden; }
         .btn-zen-main:active { transform: scale(0.92); }
@@ -55,15 +57,11 @@
         
         .actions, .presets { display: flex; justify-content: center; gap: 0.4rem; flex-wrap: wrap; }
         button.action-btn { background: transparent; border: 1px solid var(--ui-text); color: var(--ui-text); padding: 0.3rem 0.8rem; font-family: inherit; font-size: 0.7rem; cursor: pointer; text-transform: uppercase; transition: all 0.2s; flex-grow: 1; border-radius: 4px; }
-        
-        /* Efecto Hover general (se vuelve oscuro) */
         button.action-btn:hover { background: var(--ui-text); color: var(--ui-bg); }
-        
         button.primary { background: var(--ui-text); color: var(--ui-bg); font-weight: bold; }
         button.primary:hover { background: transparent; color: var(--ui-text); }
         button.active-toggle { background: #e0e0e0; color: #000; font-weight: bold; }
         
-        /* Botones Cíclicos (Excepción del Hover oscuro para que se lea el texto siempre) */
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         button.cyclic-btn { font-size: 0.65rem; padding: 0.4rem 0.2rem; text-align: center; border-color: #aaa; background: #fafafa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
         button.cyclic-btn span { font-weight: bold; color: var(--ui-text); }
@@ -80,6 +78,7 @@
         #stats { position: absolute; top: 15px; left: 20px; font-size: 0.7rem; color: #aaa; z-index: 5; transition: opacity 0.5s; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         body.zen-idle #stats { opacity: 0; } 
         
+        /* --- RESPONSIVIDAD --- */
         @media (min-width: 769px) { 
             .btn-config { display: none; } 
             body.zen-active #dashboard { margin-right: -320px; }
@@ -98,6 +97,7 @@
     <div id="sky-bg"></div>
 
     <div id="app-container">
+        
         <div id="canvas-container">
             <div id="stats">NODOS: 1 | AÑOS: 0.0</div>
             <svg id="bonsai-svg" viewBox="-250 -485 500 500">
@@ -160,6 +160,6 @@
         </div>
     </div>
 
-    <script type="module" src="./main.js"></script>
+    <script type="module" src="./main.js?v=4"></script>
 </body>
 </html>

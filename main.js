@@ -4,8 +4,7 @@ import { MotorAudio } from './MotorAudio.js';
 import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js';
 import { Rama, rnd, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
 
-// --- 1. INICIALIZACIÓN DE CONTEXTO Y MOTORES ---
-
+// --- INICIALIZACIÓN DE CONTEXTO ---
 const domContext = {
     layerPot: document.getElementById('layer-pot'),
     layerTree: document.getElementById('layer-tree'),
@@ -15,11 +14,7 @@ const domContext = {
 
 const audioMotor = new MotorAudio();
 const entornoMotor = new MotorEntorno(domContext);
-
-// Inyectamos el motor de audio al contexto para que el Bonsái pueda disparar el sonido de las flores
 domContext.audioMotor = audioMotor;
-
-// --- 2. ESTADO GLOBAL DEL SIMULADOR ---
 
 let arbolBase = null;
 let animationFrameId = null;
@@ -28,30 +23,32 @@ let tiempoViento = 0;
 let isZenMode = false;
 let zenPausa = false;
 let idleTimeout = null;
-
 let showLeaves = true;
 let showFlowers = true;
+let audioIniciado = false;
 
-// Referencias directas a UI estática
 const statsDisplay = document.getElementById('stats');
 const btnZenMain = document.getElementById('btn-zen-main');
 const dashboard = document.getElementById('dashboard');
 
-// --- 3. CONSTRUCTOR DE INTERFAZ DINÁMICA (Data-Driven UI) ---
+// --- GENERADOR DE INTERFAZ CÍCLICA ---
+const ESTADO_CICLICO = {}; // Guarda el índice actual de cada botón cíclico
 
 function construirInterfaz() {
     const contenedorMorfologia = document.getElementById('ui-morfologia');
     const contenedorParametros = document.getElementById('ui-parametros');
 
-    // Generar Selects de Entorno
-    contenedorMorfologia.innerHTML += crearSelect('p-maceta-forma', 'Forma Maceta', DICCIONARIO_ENTORNO.macetas);
-    contenedorMorfologia.innerHTML += crearSelect('p-maceta-color', 'Esmalte (Color)', DICCIONARIO_ENTORNO.esmaltes);
+    // Generar Botones Cíclicos en lugar de Selects (Ahorro Masivo de Espacio)
+    let htmlCiclicos = `<div class="grid-2">`;
+    htmlCiclicos += crearBotonCiclico('p-maceta-forma', 'Maceta', DICCIONARIO_ENTORNO.macetas);
+    htmlCiclicos += crearBotonCiclico('p-maceta-color', 'Color', DICCIONARIO_ENTORNO.esmaltes);
+    htmlCiclicos += crearBotonCiclico('p-forma', 'Hoja', DICCIONARIO_BOTANICO.hojas);
+    htmlCiclicos += crearBotonCiclico('p-flora', 'Flora', DICCIONARIO_BOTANICO.flora);
+    htmlCiclicos += `</div>`;
+    
+    contenedorMorfologia.innerHTML = htmlCiclicos;
 
-    // Generar Selects de Botánica
-    contenedorMorfologia.innerHTML += crearSelect('p-forma', 'Forma Foliar', DICCIONARIO_BOTANICO.hojas);
-    contenedorMorfologia.innerHTML += crearSelect('p-flora', 'Tipo de Flora', DICCIONARIO_BOTANICO.flora);
-
-    // Generar Sliders Paramétricos desde la configuración del Motor
+    // Generar Sliders Paramétricos
     PARAMETROS_MOTOR.forEach(param => {
         const isDecimal = param.step % 1 !== 0;
         const valTxt = isDecimal ? param.default.toFixed(1) : param.default;
@@ -65,41 +62,53 @@ function construirInterfaz() {
         `;
     });
 
-    // Asignar Event Listeners a los elementos recién creados
-    document.getElementById('p-maceta-forma').addEventListener('change', updatePot);
-    document.getElementById('p-maceta-color').addEventListener('change', updatePot);
+    // Event Listeners para Botones Cíclicos
+    ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
+        document.getElementById(id).addEventListener('click', (e) => {
+            let state = ESTADO_CICLICO[id];
+            // Avanza al siguiente índice de la lista y reinicia si llega al final
+            state.index = (state.index + 1) % state.opciones.length; 
+            let opt = state.opciones[state.index];
+            
+            // Actualiza el valor interno y visual
+            e.target.setAttribute('data-value', opt.id);
+            e.target.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
+            
+            if(id.startsWith('p-maceta')) {
+                updatePot();
+            }
+        });
+    });
 
+    // Event Listeners para Sliders
     document.querySelectorAll('#ui-parametros input[type="range"]').forEach(input => {
         input.addEventListener('input', (e) => {
             const isDecimal = e.target.step % 1 !== 0;
             let val = isDecimal ? parseFloat(e.target.value).toFixed(1) : e.target.value;
-            // Forzar formato .0 si es entero pero el slider es decimal (ej. 3.0)
             if(isDecimal && Number.isInteger(parseFloat(val))) val += ".0";
             document.getElementById(`val-${e.target.id}`).textContent = val;
         });
     });
 }
 
-function crearSelect(id, label, opciones) {
-    let html = `<div class="control-group"><label><span>${label}</span></label><select id="${id}">`;
-    opciones.forEach(opt => html += `<option value="${opt.id}">${opt.nombre}</option>`);
-    html += `</select></div>`;
-    return html;
+// Función Auxiliar para crear el HTML del botón cíclico
+function crearBotonCiclico(id, prefix, opciones) {
+    ESTADO_CICLICO[id] = { index: 0, opciones, prefix }; // Inicia en el primer elemento
+    return `<button id="${id}" class="action-btn cyclic-btn" data-value="${opciones[0].id}">${prefix}: <span>${opciones[0].nombre}</span></button>`;
 }
 
-// --- 4. LECTURA Y ACTUALIZACIÓN DE PARÁMETROS ---
 
-// Extrae todos los valores actuales de la UI
+// --- EXTRACCIÓN Y ACTUALIZACIÓN DE DATOS ---
+
 export function getParams() {
     const params = {
-        formaHoja: document.getElementById('p-forma').value,
-        tipoFlora: document.getElementById('p-flora').value,
+        // Lee el atributo oculto 'data-value' de los botones cíclicos
+        formaHoja: document.getElementById('p-forma').getAttribute('data-value'),
+        tipoFlora: document.getElementById('p-flora').getAttribute('data-value'),
     };
     
-    // Lee automáticamente todos los sliders definidos en el diccionario
     PARAMETROS_MOTOR.forEach(p => {
         let rawVal = document.getElementById(p.id).value;
-        // Los porcentajes en la UI (0-100) se convierten a decimales (0-1) para la matemática
         if (p.id === 'p-branch' || p.id === 'p-acc' || p.id === 'p-viento' || p.id === 'p-lenVar') {
             params[p.key] = parseFloat(rawVal) / 100;
         } else {
@@ -111,22 +120,31 @@ export function getParams() {
 
 function actualizarUI(id, valor) {
     let el = document.getElementById(id);
-    if(el) {
+    if(!el) return;
+    
+    // Si es un botón cíclico, actualiza su texto y su atributo interno
+    if(el.classList.contains('cyclic-btn')) {
+        let state = ESTADO_CICLICO[id];
+        let newIndex = state.opciones.findIndex(o => o.id === valor);
+        if(newIndex !== -1) {
+            state.index = newIndex;
+            el.setAttribute('data-value', valor);
+            el.innerHTML = `${state.prefix}: <span>${state.opciones[newIndex].nombre}</span>`;
+        }
+    } else {
+        // Si es un slider
         el.value = valor;
-        // Disparar evento 'input' manualmente para actualizar la etiqueta de texto asociada
         el.dispatchEvent(new Event('input'));
     }
 }
 
-// Actualiza el SVG de la maceta
 const updatePot = () => {
-    const forma = document.getElementById('p-maceta-forma').value;
-    const color = document.getElementById('p-maceta-color').value;
+    const forma = document.getElementById('p-maceta-forma').getAttribute('data-value');
+    const color = document.getElementById('p-maceta-color').getAttribute('data-value');
     entornoMotor.renderizarMaceta(forma, color);
 };
 
-// --- 5. PERFILES BOTÁNICOS (PRESETS) ---
-
+// --- PRESETS ---
 const PRESETS_BOTANICOS = {
     pino:     { mForma: 'estandar', mColor: '#c05a41', viento: 10, length: 25, lenVar: 10, angle: 20, branch: 45, acc: 10, gen: 5, hojas: 5, flor: 8, forma: 'huso', flora: 'ninguno', edadRam: 3.5 }, 
     roble:    { mForma: 'plana',    mColor: '#2c3e50', viento: 25, length: 18, lenVar: 30, angle: 50, branch: 75, acc: 35, gen: 6, hojas: 18, flor: 7, forma: 'ovalada', flora: 'ninguno', edadRam: 2.8 },
@@ -136,15 +154,12 @@ const PRESETS_BOTANICOS = {
     limonero: { mForma: 'redonda',  mColor: '#c05a41', viento: 20, length: 16, lenVar: 25, angle: 55, branch: 75, acc: 30, gen: 5, hojas: 16, flor: 5, forma: 'ovalada', flora: 'limon', edadRam: 2.8 }
 };
 
-// Expuesto globalmente para el onclick del HTML
 window.aplicarPreset = function(tipo) {
     const p = PRESETS_BOTANICOS[tipo];
     actualizarUI('p-maceta-forma', p.mForma);
     actualizarUI('p-maceta-color', p.mColor);
     actualizarUI('p-forma', p.forma);
     actualizarUI('p-flora', p.flora);
-    
-    // Mapeamos los valores del preset a los IDs de los sliders
     actualizarUI('p-viento', p.viento);
     actualizarUI('p-edadRam', p.edadRam);
     actualizarUI('p-length', p.length);
@@ -161,7 +176,6 @@ window.aplicarPreset = function(tipo) {
 }
 
 document.getElementById('btn-mutar').addEventListener('click', () => {
-    // Selección aleatoria desde los diccionarios
     const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
     const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
     const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
@@ -172,7 +186,6 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
     actualizarUI('p-forma', fHoja);
     actualizarUI('p-flora', tFlora);
     
-    // Mutación aleatoria de parámetros numéricos
     actualizarUI('p-viento', Math.floor(rnd(10, 80)));
     actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1));
     actualizarUI('p-length', Math.floor(rnd(10, 25)));
@@ -188,20 +201,43 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
     inicializarArbol();
 });
 
+// --- AUDIO AUTOMÁTICO (ENCENDIDO AL PRIMER CLIC) ---
 
-// --- 6. EVENTOS DE INTERFAZ GENERALES ---
+function arrancarAudioSilencioso() {
+    if(!audioIniciado) {
+        // Configuramos la UI y el Motor en ON
+        audioMotor.sfxEnabled = true;
+        audioMotor.musicEnabled = true;
+        
+        document.getElementById('btn-sfx').classList.add('active-toggle');
+        document.getElementById('btn-sfx').innerHTML = "🍃 SFX: ON";
+        document.getElementById('btn-music').classList.add('active-toggle');
+        document.getElementById('btn-music').innerHTML = "🎵 MÚSICA: ON";
+        
+        // Inicializamos los contextos seguros de audio
+        audioMotor.initCtx();
+        audioMotor.initWind();
+        if(isZenMode) audioMotor.resumeMusic();
+        
+        audioIniciado = true;
+    }
+}
+// Escucha cualquier interacción en la pantalla para destrabar el audio del navegador
+window.addEventListener('click', arrancarAudioSilencioso, { once: true });
+window.addEventListener('touchstart', arrancarAudioSilencioso, { once: true });
 
-// Ocultar estadísticas si no hay movimiento de ratón/toque
+
+// --- GESTIÓN DE INTERFAZ ---
+
 function resetTimerIdle() {
     document.body.classList.remove('zen-idle');
     clearTimeout(idleTimeout);
+    // Vuelve a ocultar la UI tras 2.5s sin mover el ratón
     idleTimeout = setTimeout(() => { document.body.classList.add('zen-idle'); }, 2500);
 }
 
-// Botones del Drawer (Panel lateral)
 document.getElementById('btn-open-config').addEventListener('click', () => dashboard.classList.add('open'));
 document.getElementById('btn-close-config').addEventListener('click', () => dashboard.classList.remove('open'));
-
 document.getElementById('btn-reset').addEventListener('click', inicializarArbol);
 
 document.getElementById('btn-hojas').addEventListener('click', (e) => { 
@@ -213,39 +249,31 @@ document.getElementById('btn-flores').addEventListener('click', (e) => {
     e.target.classList.toggle('active-toggle', showFlowers); 
 });
 
-// Botones de Audio y Entorno
 document.getElementById('btn-sfx').addEventListener('click', (e) => {
     const activado = audioMotor.toggleSfx();
     e.target.classList.toggle('active-toggle', activado);
     e.target.innerHTML = activado ? "🍃 SFX: ON" : "🍃 SFX: OFF";
 });
-
 document.getElementById('btn-music').addEventListener('click', (e) => {
     const activado = audioMotor.toggleMusic();
     e.target.classList.toggle('active-toggle', activado);
     e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF";
     if (activado && isZenMode) audioMotor.resumeMusic();
 });
-
 document.getElementById('btn-fondo').addEventListener('click', (e) => {
     const activado = entornoMotor.toggleSky();
     e.target.classList.toggle('active-toggle', activado);
     e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF";
 });
 
-// Botón Principal Zen
 btnZenMain.addEventListener('click', () => {
     isZenMode = !isZenMode;
     if (isZenMode) {
         document.body.classList.add('zen-active');
         btnZenMain.classList.add('active');
         zenPausa = false;
-        
-        if (iteracionGlobal > 18) { 
-            document.getElementById('btn-mutar').click(); 
-        } 
+        if (iteracionGlobal > 18) { document.getElementById('btn-mutar').click(); } 
         audioMotor.resumeMusic();
-        
     } else {
         document.body.classList.remove('zen-active');
         btnZenMain.classList.remove('active');
@@ -254,29 +282,23 @@ btnZenMain.addEventListener('click', () => {
 });
 
 
-// --- 7. BUCLE DE ANIMACIÓN PRINCIPAL ---
+// --- CICLO DE VIDA DEL BONSÁI ---
 
 function bucleAnimacion() {
     tiempoViento += 0.016; 
-    
     let paramsActuales = getParams();
     
-    // Actualizar audio del viento
     audioMotor.actualizarViento(tiempoViento, paramsActuales.viento * 100);
 
     if (isZenMode && !zenPausa && arbolBase) {
         let deltaZen = 0.015; 
-        
         arbolBase.crecer(deltaZen, paramsActuales);
         iteracionGlobal += deltaZen;
         statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
 
-        // Reinicio automático en Zen
         if (iteracionGlobal > 18) {
             zenPausa = true;
-            setTimeout(() => {
-                if(isZenMode) { document.getElementById('btn-mutar').click(); } 
-            }, 4000); 
+            setTimeout(() => { if(isZenMode) { document.getElementById('btn-mutar').click(); } }, 4000); 
         }
     }
 
@@ -306,12 +328,11 @@ function inicializarArbol() {
     resetTimerIdle();
 }
 
-// --- 8. ARRANQUE ---
+// --- ARRANQUE ---
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     window.aplicarPreset('pino'); 
     
-    // Autostart Zen
     isZenMode = true;
     document.body.classList.add('zen-active');
     btnZenMain.classList.add('active');

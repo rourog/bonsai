@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bonsái Paramétrico - Motor Audiovisual Dividido</title>
+    <title>Bonsái Paramétrico - Motor Audiovisual Estable</title>
     <style>
         :root {
             --bg-color: #f5f5f7;
@@ -44,7 +44,7 @@
         .flora-activa { cursor: crosshair; }
         .flora-activa:hover path { fill: #e74c3c !important; }
 
-        /* --- UI FLOTANTE --- */
+        /* --- UI FLOTANTE MINIMALISTA --- */
         #floating-ui {
             position: absolute;
             bottom: 30px;
@@ -107,6 +107,7 @@
             100% { transform: translate(-50%, -50%) scale(12); opacity: 0; }
         }
 
+        /* Botón de Engrane Puro */
         .btn-config {
             background: rgba(255, 255, 255, 0.9);
             border: 1px solid var(--border);
@@ -211,7 +212,7 @@
             </div>
 
             <div class="actions">
-                <button id="btn-reset" class="action-btn">Semilla</button>
+                <button id="btn-reset" class="action-btn">Plantar Semilla</button>
                 <button id="btn-mutar" class="action-btn primary">Mutar</button>
             </div>
 
@@ -390,7 +391,7 @@
                 
                 osc.start(audioCtx.currentTime);
                 osc.stop(audioCtx.currentTime + 0.1);
-            } catch (e) { /* Falla segura */ }
+            } catch (e) {}
         }
 
         function playGenerativeChime() {
@@ -439,10 +440,7 @@
             if (musicEnabled) {
                 e.target.classList.add('active-toggle');
                 e.target.innerHTML = "🎵 MÚSICA: ON";
-                if(isZenMode) {
-                    clearTimeout(chimeTimeout);
-                    playGenerativeChime();
-                }
+                if(isZenMode) playGenerativeChime();
             } else {
                 e.target.classList.remove('active-toggle');
                 e.target.innerHTML = "🎵 MÚSICA: OFF";
@@ -451,7 +449,7 @@
         });
 
 
-        // --- MOTOR BOTÁNICO ---
+        // --- MOTOR BOTÁNICO PARAMÉTRICO ---
         const SVG_NS = "http://www.w3.org/2000/svg";
         const MAX_AGE = 8;
         const TENSION_ANIMACION = 0.08; 
@@ -487,7 +485,7 @@
 
         let showLeaves = true;
         let showFlowers = true;
-        let animationFrameId;
+        let animationFrameId = null;
         
         let iteracionGlobal = 0;
         let tiempoViento = 0; 
@@ -640,7 +638,6 @@
                 
                 layerFlowers.appendChild(this.dom);
                 
-                // AUDIO SEGURO
                 playPop();
             }
 
@@ -749,6 +746,7 @@
                 this.podada = false; 
                 this.seed = Math.random() * 1000; 
                 
+                // HERENCIA GENÉTICA: El hijo siempre copia el color base del padre
                 if (this.padre) {
                     this.baseBarkColor = this.padre.baseBarkColor;
                 } else {
@@ -996,7 +994,6 @@
         function bucleAnimacion() {
             tiempoViento += 0.016; 
             
-            // AUDIO SEGURO: Modulación de viento
             if (sfxEnabled && windGainNode && audioCtx) {
                 try {
                     let windIntensity = parseInt(document.getElementById('p-viento').value) / 100;
@@ -1025,15 +1022,20 @@
 
         function inicializar() {
             layerTree.innerHTML = ''; layerLeaves.innerHTML = ''; layerFlowers.innerHTML = '';
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            // CORRECCIÓN CRÍTICA: Liberar el slot de animación
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
             arbolBase = new Rama(0, 0, 0, -90);
             iteracionGlobal = 0;
             zenPausa = false;
             statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
             
-            // Asegura que el loop siempre exista aunque se plante una semilla manual
-            if (!animationFrameId) bucleAnimacion();
-            
+            // Re-inicia el motor de físicas
+            bucleAnimacion();
             resetTimerIdle();
         }
 
@@ -1070,11 +1072,11 @@
             }
         });
 
-        // ARRANQUE AUTOMÁTICO
+        // ARRANQUE SEGURO
         renderizarMaceta();
-        aplicarPreset('roble');
-        inicializar(); // Plantea la primera semilla y arranca el requestAnimationFrame
+        aplicarPreset('pino');
         
+        // Activa visualmente el Modo Zen y el motor arranca solo
         isZenMode = true;
         document.body.classList.add('zen-active');
         btnZenMain.classList.add('active');

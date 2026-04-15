@@ -213,7 +213,13 @@ export class Rama {
         this.podada = false; 
         this.seed = seededRandom() * 1000; 
         this.ctx = ctx; 
-        this.esAccesoria = false; // CORRECCIÓN: Etiqueta inicializada
+        this.esAccesoria = false; 
+        
+        // Vector Normal (Usado para anclar ramas al borde y no al centro)
+        this.nxMid = 0; 
+        this.nyMid = 0;
+        this.nxFin = 0;
+        this.nyFin = 0;
         
         if (this.padre) {
             this.baseBarkColor = this.padre.baseBarkColor;
@@ -223,7 +229,16 @@ export class Rama {
 
         this.startX = startX; this.startY = startY;
         this.angulo = anguloInicial;
-        this.curvatura = rnd(-params.maxAngle, params.maxAngle) + ((-90 - this.angulo) * 0.1); 
+        
+        // CORRECCIÓN 1: Dirección Forzada. 
+        // Si el ángulo me empuja a la derecha (>0), la curva debe tender a la derecha.
+        // Si me empuja a la izquierda (<0), la curva tiende a la izquierda.
+        let tendenciaCurva = (this.angulo > -90) ? 1 : -1;
+        if (this.gen === 0) tendenciaCurva = seededRandom() > 0.5 ? 1 : -1; // Tronco es libre
+        
+        // Reducimos el caos de la curvatura para mantener un flujo más coherente
+        let spreadCurva = params.maxAngle * 0.6; 
+        this.curvatura = (tendenciaCurva * rnd(0, spreadCurva)) + ((-90 - this.angulo) * 0.05); 
         
         let v = params.lenVariance;
         this.lenMultiplier = this.gen === 0 ? (1.0 + rnd(-v * 0.5, v * 0.5)) : (1.0 + rnd(-v, v));
@@ -311,8 +326,9 @@ export class Rama {
 
         if (this.age >= edadBifurcacion + 1.0 && this.gen > 1 && this.gen < params.maxGen - 1 && !this.tieneAccesoria) {
             if (seededRandom() < params.accProb) {
-                // CORRECCIÓN BUG ACCESORIA: Pasamos true como tercer argumento
-                this.crearHijo(this.angulo + rnd(30, params.maxAngle) * (seededRandom() > 0.5 ? 1 : -1), params, true); 
+                // Direccionamos la accesoria lejos del tronco principal
+                let direccion = seededRandom() > 0.5 ? 1 : -1;
+                this.crearHijo(this.angulo + rnd(30, params.maxAngle) * direccion, params, true); 
                 this.tieneAccesoria = true;
             }
         }
@@ -320,7 +336,7 @@ export class Rama {
 
     crearHijo(angulo, params, esAcc = false) {
         let hijo = new Rama(this.gen + 1, this.endXAct || this.startX, this.endYAct || this.startY, angulo, this, params, this.ctx);
-        hijo.esAccesoria = esAcc; // Inyecta la propiedad morfológica
+        hijo.esAccesoria = esAcc; 
         this.hijos.push(hijo);
     }
 
@@ -395,15 +411,15 @@ export class Rama {
         rBase += perturbBase; let rMid = (rBase + rFin) / 2 + perturbMid; rFin += perturbFin;
 
         let nInicioX = Math.cos(angRadInicio - Math.PI/2); let nInicioY = Math.sin(angRadInicio - Math.PI/2);
-        let nMidX = Math.cos(angRadMid - Math.PI/2); let nMidY = Math.sin(angRadMid - Math.PI/2);
-        let nFinX = Math.cos(angRadFin - Math.PI/2); let nFinY = Math.sin(angRadFin - Math.PI/2);
+        this.nxMid = Math.cos(angRadMid - Math.PI/2); this.nyMid = Math.sin(angRadMid - Math.PI/2);
+        this.nxFin = Math.cos(angRadFin - Math.PI/2); this.nyFin = Math.sin(angRadFin - Math.PI/2);
 
         let bx1 = this.startX + nInicioX * rBase; let by1 = this.startY + nInicioY * rBase;
         let bx2 = this.startX - nInicioX * rBase; let by2 = this.startY - nInicioY * rBase;
-        let cx1 = midX + nMidX * rMid; let cy1 = midY + nMidY * rMid;
-        let cx2 = midX - nMidX * rMid; let cy2 = midY - nMidY * rMid;
-        let px1 = this.endXAct + nFinX * rFin; let py1 = this.endYAct + nFinY * rFin;
-        let px2 = this.endXAct - nFinX * rFin; let py2 = this.endYAct - nFinY * rFin;
+        let cx1 = midX + this.nxMid * rMid; let cy1 = midY + this.nyMid * rMid;
+        let cx2 = midX - this.nxMid * rMid; let cy2 = midY - this.nyMid * rMid;
+        let px1 = this.endXAct + this.nxFin * rFin; let py1 = this.endYAct + this.nyFin * rFin;
+        let px2 = this.endXAct - this.nxFin * rFin; let py2 = this.endYAct - this.nyFin * rFin;
 
         let polyPath = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
         this.path.setAttribute("d", polyPath);
@@ -420,12 +436,18 @@ export class Rama {
         this.jointTip.style.display = "block"; 
 
         this.hijos.forEach(hijo => {
+            // CORRECCIÓN 2: Anclaje de Ramas
+            // En lugar de nacer en el centro exacto, usamos el vector Normal (nxMid, nyMid)
+            // para desplazar el nacimiento hacia el borde del tronco, evitando ramas despegadas.
             if (hijo.esAccesoria) {
-                hijo.startX = midX;
-                hijo.startY = midY;
+                // Direccionamos el anclaje según hacia dónde apunte el hijo
+                let direccionHijo = (hijo.angulo > this.angulo) ? 1 : -1;
+                hijo.startX = midX + (this.nxMid * rMid * 0.6 * direccionHijo);
+                hijo.startY = midY + (this.nyMid * rMid * 0.6 * direccionHijo);
             } else {
-                hijo.startX = this.endXAct;
-                hijo.startY = this.endYAct;
+                let direccionHijo = (hijo.angulo > this.angulo) ? 1 : -1;
+                hijo.startX = this.endXAct + (this.nxFin * rFin * 0.4 * direccionHijo);
+                hijo.startY = this.endYAct + (this.nyFin * rFin * 0.4 * direccionHijo);
             }
             hijo.animarYRenderizar(totalWind, tiempoViento, windIntensity, showLeaves, showFlowers);
         });

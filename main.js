@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR ACELERADO Y FÍSICA MEJORADA ---
+// --- ORQUESTADOR ACELERADO Y FÍSICA CORREGIDA ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -174,7 +174,6 @@ function iniciarMuerte(callbackRenacer) {
                     if(m) {
                         hojasF.push({
                             dom: h.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
-                            // FÍSICA CORREGIDA: No hay 'salto' hacia arriba (vy empieza en casi cero)
                             vx: (Math.random() - 0.5) * 1.5, vy: Math.random() * 0.5, fallTime: 0,
                             startOpacity: parseFloat(h.dom.getAttribute('opacity') || 1)
                         });
@@ -223,26 +222,28 @@ function iniciarMuerte(callbackRenacer) {
     shuffle(hojasF);
     hojasF.forEach((h, i) => {
         let pct = i / hojasF.length;
-        if (pct < 0.33) h.fallTime = Math.random() * 300;           // Oleada 1 (inmediata)
-        else if (pct < 0.66) h.fallTime = 800 + Math.random() * 300;  // Oleada 2 
-        else h.fallTime = 1600 + Math.random() * 300;                 // Oleada 3
+        if (pct < 0.33) h.fallTime = Math.random() * 300;           
+        else if (pct < 0.66) h.fallTime = 800 + Math.random() * 300;  
+        else h.fallTime = 1600 + Math.random() * 300;                 
     });
 
     let ramasFlat = [];
     let tronco = [];
-    let fallTimeCursor = 2500; // Las ramas empiezan a caer al terminar las hojas
+    let fallTimeCursor = 2500; 
     
-    // 2. CONSERVACIÓN ESTRUCTURAL: La Generación 0, 1 y 2 no caen, se vuelven tronco.
-    for (let g = 0; g <= maxGenActual; g++) {
+    // 2. CORRECCIÓN ESTRUCTURAL: Iteramos de la generación más ALTA (puntas) hacia la más BAJA (centro)
+    for (let g = maxGenActual; g >= 0; g--) {
         if (ramasPorGen[g]) {
             if (g <= 2) {
+                // El tronco y ramas principales se guardan para la necrosis final
                 tronco.push(...ramasPorGen[g]); 
             } else {
+                // Las puntas finas se programan para caer primero
                 ramasPorGen[g].forEach(r => {
                     r.fallTime = fallTimeCursor + Math.random() * 150;
                     ramasFlat.push(r);
                 });
-                fallTimeCursor += 500; // Caen muy rápido capa tras capa
+                fallTimeCursor += 500; // Retraso entre capa y capa para asegurar orden de caída
                 
                 if (audioMotor.sfxEnabled) {
                     let audioTime = fallTimeCursor;
@@ -267,13 +268,12 @@ function iniciarMuerte(callbackRenacer) {
                 completado = false;
                 let age = elapsed - p.fallTime; 
                 
-                p.vy += 0.03; // Gravedad muy suave
-                p.vx += Math.sin(now * 0.003 + p.y) * 0.05; // Oscilación (vaivén natural)
+                p.vy += 0.03; 
+                p.vx += Math.sin(now * 0.003 + p.y) * 0.05; 
                 p.vx *= 0.92; 
-                p.vy *= 0.95; // Límite de velocidad de caída
+                p.vy *= 0.95; 
                 p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
 
-                // Desvanecimiento acelerado
                 let op = p.startOpacity;
                 if (age > 700) {
                     op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
@@ -304,7 +304,7 @@ function iniciarMuerte(callbackRenacer) {
                 }
 
                 let op = 1;
-                if (age > 800) { // Se borran muy rápido para limpiar la vista
+                if (age > 800) { 
                     op = Math.max(0, 1 - (age - 800) / 400);
                 }
 
@@ -316,7 +316,7 @@ function iniciarMuerte(callbackRenacer) {
 
         // FASE 3: NECROSIS DEL TRONCO (Generaciones 0, 1, 2)
         if (elapsed > trunkTime) {
-            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); // 1 segundo en ennegrecer
+            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
             tronco.forEach(r => {
                 if (r.dom.style.display !== 'none') {
                     completado = false;
@@ -331,7 +331,7 @@ function iniciarMuerte(callbackRenacer) {
                     }
                     
                     if (elapsed > trunkTime + 1000) {
-                        let opFinal = 1 - ((elapsed - (trunkTime + 1000)) / 800); // 0.8s en desaparecer
+                        let opFinal = 1 - ((elapsed - (trunkTime + 1000)) / 800); 
                         r.dom.setAttribute('opacity', Math.max(0, opFinal));
                         if (opFinal <= 0) r.dom.style.display = 'none';
                     }
@@ -351,8 +351,6 @@ function iniciarMuerte(callbackRenacer) {
     
     deathFrameId = requestAnimationFrame(loopMuerte);
 }
-// ---------------------------------------------
-
 
 async function solicitarWakeLock() {
     try {

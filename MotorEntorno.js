@@ -1,279 +1,327 @@
-// MotorEntorno.js
+// MotorAudio.js
 
-export const DICCIONARIO_ENTORNO = {
-    macetas: [
-        { id: 'estandar', nombre: 'Rectangular' },
-        { id: 'redonda', nombre: 'Tazón Suave' },
-        { id: 'alta', nombre: 'Alta Cascada' },
-        { id: 'plana', nombre: 'Plana Bosque' }
-    ],
-    esmaltes: [
-        { id: '#c05a41', nombre: 'Terracota' },
-        { id: '#2c3e50', nombre: 'Azul Cobalto' },
-        { id: '#34495e', nombre: 'Negro Mate' },
-        { id: '#8c8c91', nombre: 'Gris Concreto' },
-        { id: '#458b74', nombre: 'Verde Jade' }
-    ]
-};
-
-export class MotorEntorno {
-    constructor(ctx) {
-        this.ctx = ctx; 
-        this.skyEnabled = false;
-        this.skyContainer = document.getElementById('sky-bg');
+export class MotorAudio {
+    constructor() {
+        this.audioCtx = null;
+        this.sfxEnabled = false;
+        this.musicEnabled = false;
         
-        // Inicializamos el ecosistema visual al instanciar el motor
-        this.inyectarEstilosAtmosfericos();
-        this.construirCielo();
+        this.windGainNode = null;
+        this.leavesGainNode = null;
+        this.cricketGainNode = null;
+        this.noiseBuffer = null;
+        
+        this.musicTimeout = null;
+        this.ambientTimeout = null;
+        
+        this.pentatonicScale = [
+            130.81, 146.83, 164.81, 196.00, 220.00,
+            261.63, 293.66, 329.63, 392.00, 440.00,
+            523.25, 587.33, 659.25, 783.99, 880.00
+        ];
+
+        this.chimeNotes = [1200, 1500, 1800, 2100, 2600, 3200];
     }
 
-    // --- 1. RENDERIZADO DE LA MACETA ---
-    renderizarMaceta(forma, color) {
-        let svg = '';
-        switch(forma) {
-            case 'estandar':
-                svg = `<rect x="-45" y="0" width="90" height="18" fill="${color}" rx="2"/>
-                       <polygon points="-40,18 40,18 30,35 -30,35" fill="${color}" opacity="0.85"/>
-                       <rect x="-35" y="35" width="8" height="4" fill="${color}" opacity="0.6"/>
-                       <rect x="27" y="35" width="8" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
-            case 'redonda':
-                svg = `<path d="M -50 5 L 50 5 C 50 40 -50 40 -50 5 Z" fill="${color}" opacity="0.9"/>
-                       <rect x="-53" y="0" width="106" height="6" fill="${color}" rx="2"/>
-                       <rect x="-20" y="30" width="40" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
-            case 'alta':
-                svg = `<polygon points="-35,6 35,6 22,70 -22,70" fill="${color}" opacity="0.85"/>
-                       <rect x="-40" y="0" width="80" height="6" fill="${color}" rx="1"/>
-                       <rect x="-22" y="70" width="44" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
-            case 'plana':
-                svg = `<rect x="-80" y="0" width="160" height="10" fill="${color}" rx="1"/>
-                       <polygon points="-75,10 75,10 70,20 -70,20" fill="${color}" opacity="0.85"/>
-                       <rect x="-65" y="20" width="12" height="4" fill="${color}" opacity="0.6"/>
-                       <rect x="53" y="20" width="12" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
+    initCtx() {
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            this.crearRuidoBlanco(); 
         }
-        this.ctx.layerPot.innerHTML = svg;
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
     }
 
-    // --- 2. CONSTRUCCIÓN DEL ECOSISTEMA VISUAL (DOM) ---
-    construirCielo() {
-        if (!this.skyContainer) return;
-        
-        // Limpiamos el contenedor base
-        this.skyContainer.innerHTML = '';
-        this.skyContainer.className = 'atmosfera-inactiva'; // Clase base
-
-        // Estructura de capas HTML
-        const htmlAtmosfera = `
-            <div class="capa-cielo cielo-dia"></div>
-            <div class="capa-cielo cielo-atardecer"></div>
-            <div class="capa-cielo cielo-noche"></div>
-            <div class="capa-cielo cielo-amanecer"></div>
-
-            <div class="capa-estrellas"></div>
-
-            <div class="capa-nubes">
-                <div class="nube n1"></div>
-                <div class="nube n2"></div>
-                <div class="nube n3"></div>
-            </div>
-
-            <div class="rueda-celeste">
-                <div class="astro sol"></div>
-                <div class="astro luna"></div>
-            </div>
-        `;
-        
-        this.skyContainer.innerHTML = htmlAtmosfera;
+    crearRuidoBlanco() {
+        const bufferSize = this.audioCtx.sampleRate * 2; 
+        this.noiseBuffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+        const data = this.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
     }
 
-    // --- 3. INYECCIÓN DE CSS ACELERADO POR GPU ---
-    inyectarEstilosAtmosfericos() {
-        // Previene inyectarlo dos veces si el motor se reinicia
-        if (document.getElementById('css-entorno')) return;
-
-        const estilo = document.createElement('style');
-        estilo.id = 'css-entorno';
-        
-        // Duración de un día completo en segundos (ej. 120s = 2 minutos por ciclo)
-        const cicloSegundos = 120; 
-
-        estilo.innerHTML = `
-            /* Contenedor principal anula el CSS viejo del index.html */
-            #sky-bg {
-                background: none !important;
-                overflow: hidden;
-            }
-
-            .atmosfera-inactiva * {
-                animation-play-state: paused !important;
-                opacity: 0 !important;
-                transition: opacity 1s ease;
-            }
-
-            body.bg-sky-active #sky-bg * {
-                animation-play-state: running;
-            }
-
-            /* --- CAPAS BASE DEL CIELO --- */
-            .capa-cielo {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                opacity: 0; z-index: 1;
-            }
-            body.bg-sky-active .cielo-dia { 
-                background: linear-gradient(to bottom, #54b1f5 0%, #e0f2fe 80%); 
-                animation: cicloDia ${cicloSegundos}s infinite linear; 
-            }
-            body.bg-sky-active .cielo-atardecer { 
-                background: linear-gradient(to bottom, #4c3b71 0%, #f68989 60%, #ffc371 100%); 
-                animation: cicloAtardecer ${cicloSegundos}s infinite linear; 
-            }
-            body.bg-sky-active .cielo-noche { 
-                background: linear-gradient(to bottom, #0b1320 0%, #1a2a42 100%); 
-                animation: cicloNoche ${cicloSegundos}s infinite linear; 
-            }
-            body.bg-sky-active .cielo-amanecer { 
-                background: linear-gradient(to bottom, #8ab3d9 0%, #ffb07c 80%); 
-                animation: cicloAmanecer ${cicloSegundos}s infinite linear; 
-            }
-
-            /* --- ESTRELLAS --- */
-            .capa-estrellas {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;
-                background-image: 
-                    radial-gradient(1px 1px at 10% 20%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(1px 1px at 30% 60%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(2px 2px at 40% 30%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(1px 1px at 70% 80%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(2px 2px at 80% 10%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(1px 1px at 90% 40%, #fff, rgba(0,0,0,0));
-                background-size: 200px 200px;
-                opacity: 0;
-            }
-            body.bg-sky-active .capa-estrellas {
-                animation: cicloNoche ${cicloSegundos}s infinite linear, parpadeo 4s infinite alternate ease-in-out;
-            }
-
-            /* --- SOL Y LUNA (Rueda rotatoria) --- */
-            .rueda-celeste {
-                position: absolute;
-                top: 50%; left: 50%;
-                width: 100vh; height: 100vh; /* Rueda gigante */
-                margin-left: -50vh; margin-top: -30vh; /* Centrado desplazado */
-                border-radius: 50%;
-                z-index: 3;
-            }
-            body.bg-sky-active .rueda-celeste {
-                animation: rotacionCeleste ${cicloSegundos}s infinite linear;
-            }
-
-            .astro {
-                position: absolute;
-                width: 80px; height: 80px;
-                border-radius: 50%;
-                left: 50%; margin-left: -40px;
-            }
-            .sol {
-                top: -40px; /* Arriba en la rueda */
-                background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,235,160,0.8) 40%, rgba(255,255,255,0) 70%);
-                box-shadow: 0 0 60px rgba(255, 235, 160, 0.6);
-            }
-            .luna {
-                bottom: -40px; /* Abajo en la rueda */
-                background: #f4f6f0;
-                box-shadow: 0 0 40px rgba(255, 255, 255, 0.4), inset -10px -10px 15px rgba(0,0,0,0.2);
-            }
-
-            /* --- NUBES --- */
-            .capa-nubes {
-                position: absolute; top: 0; left: 0; width: 100%; height: 50%; z-index: 4;
-            }
-            .nube {
-                position: absolute; background: white; border-radius: 50px;
-                filter: blur(4px); opacity: 0.6;
-            }
-            .nube::before, .nube::after {
-                content: ''; position: absolute; background: white; border-radius: 50%;
-            }
-            
-            .n1 { width: 120px; height: 40px; top: 20%; left: -150px; animation: flotar 45s infinite linear; }
-            .n1::before { width: 60px; height: 60px; top: -30px; left: 20px; }
-            
-            .n2 { width: 180px; height: 50px; top: 40%; left: -200px; animation: flotar 65s infinite linear 15s; opacity: 0.4; }
-            .n2::before { width: 80px; height: 80px; top: -40px; left: 30px; }
-            .n2::after { width: 60px; height: 60px; top: -20px; left: 90px; }
-            
-            .n3 { width: 90px; height: 30px; top: 10%; left: -100px; animation: flotar 35s infinite linear 5s; opacity: 0.5; }
-            .n3::before { width: 40px; height: 40px; top: -20px; left: 15px; }
-
-            body.bg-sky-active .nube {
-                /* Las nubes se tiñen según la hora del día */
-                animation-play-state: running;
-            }
-
-            /* --- KEYFRAMES MATEMÁTICOS DEL CICLO --- */
-            
-            /* Rotación del Sol y Luna (0deg = Mediodía, 180deg = Medianoche) */
-            @keyframes rotacionCeleste {
-                0% { transform: rotate(-90deg); }   /* Amanecer */
-                25% { transform: rotate(0deg); }    /* Mediodía */
-                50% { transform: rotate(90deg); }   /* Atardecer */
-                75% { transform: rotate(180deg); }  /* Medianoche */
-                100% { transform: rotate(270deg); } /* Siguiente Amanecer */
-            }
-
-            /* Transiciones de Opacidad de las Capas (Magia Visual) */
-            @keyframes cicloDia {
-                0%, 100% { opacity: 0; }
-                10%, 40% { opacity: 1; }
-                50%, 90% { opacity: 0; }
-            }
-            @keyframes cicloAtardecer {
-                0%, 30% { opacity: 0; }
-                45%, 55% { opacity: 1; }
-                65%, 100% { opacity: 0; }
-            }
-            @keyframes cicloNoche {
-                0%, 60% { opacity: 0; }
-                70%, 90% { opacity: 1; }
-                100% { opacity: 0; }
-            }
-            @keyframes cicloAmanecer {
-                0%, 15% { opacity: 1; }
-                25%, 85% { opacity: 0; }
-                95%, 100% { opacity: 1; }
-            }
-
-            @keyframes flotar {
-                0% { transform: translateX(0vw); }
-                100% { transform: translateX(120vw); }
-            }
-            @keyframes parpadeo {
-                0% { filter: opacity(0.3); }
-                100% { filter: opacity(1); }
-            }
-        `;
-        document.head.appendChild(estilo);
+    crearFuenteRuido() {
+        const noiseSource = this.audioCtx.createBufferSource();
+        noiseSource.buffer = this.noiseBuffer;
+        noiseSource.loop = true;
+        noiseSource.start();
+        return noiseSource;
     }
 
-    // --- 4. CONTROL DE INTERFAZ ---
-    toggleSky() {
-        this.skyEnabled = !this.skyEnabled;
+    initCapasContinuas() {
+        if (this.windGainNode || !this.audioCtx) return;
+        try {
+            const sourceViento = this.crearFuenteRuido();
+            const filtroViento = this.audioCtx.createBiquadFilter();
+            filtroViento.type = 'lowpass';
+            filtroViento.frequency.value = 400;
+            this.windGainNode = this.audioCtx.createGain();
+            this.windGainNode.gain.value = 0;
+            sourceViento.connect(filtroViento).connect(this.windGainNode).connect(this.audioCtx.destination);
+
+            const sourceHojas = this.crearFuenteRuido();
+            const filtroHojas = this.audioCtx.createBiquadFilter();
+            filtroHojas.type = 'bandpass';
+            filtroHojas.frequency.value = 3500;
+            filtroHojas.Q.value = 1.5;
+            this.leavesGainNode = this.audioCtx.createGain();
+            this.leavesGainNode.gain.value = 0;
+            sourceHojas.connect(filtroHojas).connect(this.leavesGainNode).connect(this.audioCtx.destination);
+
+            const grilloOsc = this.audioCtx.createOscillator();
+            grilloOsc.type = 'sawtooth';
+            grilloOsc.frequency.value = 4500; 
+
+            const tremolo = this.audioCtx.createOscillator(); 
+            tremolo.type = 'square';
+            tremolo.frequency.value = 30;
+            const tremoloGain = this.audioCtx.createGain();
+            tremoloGain.gain.value = 1;
+            tremolo.connect(tremoloGain.gain);
+
+            this.cricketGainNode = this.audioCtx.createGain();
+            this.cricketGainNode.gain.value = 0; 
+
+            grilloOsc.connect(tremoloGain).connect(this.cricketGainNode).connect(this.audioCtx.destination);
+            grilloOsc.start();
+            tremolo.start();
+
+        } catch (e) { }
+    }
+
+    actualizarViento(tiempoViento, intensidadSlider) {
+        if (this.sfxEnabled && this.windGainNode && this.audioCtx) {
+            try {
+                let windIntensity = intensidadSlider / 100;
+                
+                let volViento = windIntensity * (0.05 + 0.1 * Math.abs(Math.sin(tiempoViento * 1.2)));
+                this.windGainNode.gain.setTargetAtTime(volViento, this.audioCtx.currentTime, 0.1);
+
+                let volHojas = windIntensity * (0.02 + 0.08 * Math.abs(Math.sin(tiempoViento * 3.5)));
+                this.leavesGainNode.gain.setTargetAtTime(volHojas, this.audioCtx.currentTime, 0.1);
+
+                let volGrillos = (1.0 - windIntensity) * 0.02;
+                volGrillos *= (0.5 + 0.5 * Math.sin(tiempoViento * 0.2)); 
+                this.cricketGainNode.gain.setTargetAtTime(volGrillos, this.audioCtx.currentTime, 0.5);
+
+            } catch(e) {}
+        }
+    }
+
+    playCarpintero(tiempoActual) {
+        const golpes = 6 + Math.floor(Math.random() * 5);
+        for(let i=0; i<golpes; i++) {
+            const noise = this.audioCtx.createBufferSource();
+            noise.buffer = this.noiseBuffer;
+            const filtro = this.audioCtx.createBiquadFilter();
+            filtro.type = 'bandpass';
+            filtro.frequency.value = 1200; 
+            
+            const gain = this.audioCtx.createGain();
+            noise.connect(filtro).connect(gain).connect(this.audioCtx.destination);
+            
+            const t = tiempoActual + (i * 0.06); 
+            gain.gain.setValueAtTime(0, t);
+            // VOLUMEN SUBIDO a 0.6
+            gain.gain.linearRampToValueAtTime(0.6, t + 0.005); 
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); 
+            
+            noise.start(t);
+            noise.stop(t + 0.05);
+        }
+    }
+
+    playRamaSeca(tiempoActual) {
+        const noise = this.audioCtx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
         
-        if (this.skyEnabled) {
-            document.body.classList.add('bg-sky-active');
-            // Elimina la inactividad temporal para que las animaciones arranquen suave
-            this.skyContainer.classList.remove('atmosfera-inactiva'); 
+        const filtro = this.audioCtx.createBiquadFilter();
+        filtro.type = 'highpass';
+        filtro.frequency.value = 1500;
+        
+        const gain = this.audioCtx.createGain();
+        noise.connect(filtro).connect(gain).connect(this.audioCtx.destination);
+        
+        gain.gain.setValueAtTime(0, tiempoActual);
+        // VOLUMEN SUBIDO a 0.5
+        gain.gain.linearRampToValueAtTime(0.5, tiempoActual + 0.01); 
+        gain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.15); 
+        
+        noise.start(tiempoActual);
+        noise.stop(tiempoActual + 0.2);
+    }
+
+    playCampanaViento(tiempoActual) {
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        osc.connect(gain).connect(this.audioCtx.destination);
+        
+        osc.type = 'sine';
+        osc.frequency.value = this.chimeNotes[Math.floor(Math.random() * this.chimeNotes.length)];
+        
+        gain.gain.setValueAtTime(0, tiempoActual);
+        // VOLUMEN SUBIDO a 0.2
+        gain.gain.linearRampToValueAtTime(0.2, tiempoActual + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 4.0); 
+        
+        osc.start(tiempoActual);
+        osc.stop(tiempoActual + 4.5);
+    }
+
+    playPezSplash(tiempoActual) {
+        const noise = this.audioCtx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+        
+        const filtro = this.audioCtx.createBiquadFilter();
+        filtro.type = 'lowpass';
+        filtro.frequency.setValueAtTime(800, tiempoActual);
+        filtro.frequency.exponentialRampToValueAtTime(100, tiempoActual + 0.3); 
+        
+        const gain = this.audioCtx.createGain();
+        noise.connect(filtro).connect(gain).connect(this.audioCtx.destination);
+        
+        gain.gain.setValueAtTime(0, tiempoActual);
+        // VOLUMEN SUBIDO a 0.5
+        gain.gain.linearRampToValueAtTime(0.5, tiempoActual + 0.05); 
+        gain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.4);
+        
+        noise.start(tiempoActual);
+        noise.stop(tiempoActual + 0.5);
+    }
+
+    playAve(tiempoActual) {
+        const trinos = Math.floor(Math.random() * 3) + 2; 
+        let t = tiempoActual;
+        for (let i = 0; i < trinos; i++) {
+            const osc = this.audioCtx.createOscillator();
+            const gain = this.audioCtx.createGain();
+            osc.connect(gain).connect(this.audioCtx.destination);
+
+            osc.type = 'sine';
+            const baseFreq = 2000 + Math.random() * 1500; 
+            osc.frequency.setValueAtTime(baseFreq, t);
+            const direccion = Math.random() > 0.5 ? 800 : -800; 
+            osc.frequency.exponentialRampToValueAtTime(baseFreq + direccion, t + 0.1);
+
+            gain.gain.setValueAtTime(0, t);
+            // VOLUMEN SUBIDO a 0.2
+            gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+            osc.start(t);
+            osc.stop(t + 0.15);
+            t += 0.1 + Math.random() * 0.1; 
+        }
+    }
+
+    ecosistemaAmbiental = () => {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        
+        const dado = Math.random();
+        const tiempo = this.audioCtx.currentTime;
+
+        if (dado > 0.90) {
+            this.playCarpintero(tiempo);
+        } else if (dado > 0.75) {
+            this.playCampanaViento(tiempo);
+            if(Math.random() > 0.5) this.playCampanaViento(tiempo + 0.2); 
+        } else if (dado > 0.60) {
+            this.playAve(tiempo);
+        } else if (dado > 0.45) {
+            this.playPezSplash(tiempo);
+        } else if (dado > 0.30) {
+            this.playRamaSeca(tiempo);
+        }
+        
+        this.ambientTimeout = setTimeout(this.ecosistemaAmbiental, 3000 + Math.random() * 7000);
+    }
+
+    ecosistemaMusical = () => {
+        if (!this.musicEnabled || !this.audioCtx) return;
+        try {
+            const cantidadNotas = Math.floor(Math.random() * 3) + 1; 
+            const rootIndex = 5 + Math.floor(Math.random() * 5); 
+            
+            for (let i = 0; i < cantidadNotas; i++) {
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.connect(gain).connect(this.audioCtx.destination);
+                
+                osc.type = Math.random() > 0.7 ? 'triangle' : 'sine'; 
+                const freq = this.pentatonicScale[rootIndex + (i * 2)];
+                osc.frequency.value = freq;
+                
+                const retrasoEntrada = this.audioCtx.currentTime + (i * (0.3 + Math.random() * 0.4));
+                const duracion = 5 + Math.random() * 4;
+
+                gain.gain.setValueAtTime(0, retrasoEntrada);
+                gain.gain.linearRampToValueAtTime(0.08, retrasoEntrada + 2);
+                gain.gain.exponentialRampToValueAtTime(0.001, retrasoEntrada + duracion);
+                
+                osc.start(retrasoEntrada);
+                osc.stop(retrasoEntrada + duracion + 1);
+            }
+        } catch (e) {}
+        this.musicTimeout = setTimeout(this.ecosistemaMusical, 4000 + Math.random() * 6000);
+    }
+
+    playPop() {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        try {
+            const osc = this.audioCtx.createOscillator();
+            const gain = this.audioCtx.createGain();
+            osc.connect(gain).connect(this.audioCtx.destination);
+            
+            osc.type = 'sine';
+            const freq = 600 + Math.random() * 800; 
+            osc.frequency.setValueAtTime(freq, this.audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.8, this.audioCtx.currentTime + 0.1);
+            
+            gain.gain.setValueAtTime(0, this.audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.08, this.audioCtx.currentTime + 0.01); 
+            gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.15); 
+            
+            osc.start(this.audioCtx.currentTime);
+            osc.stop(this.audioCtx.currentTime + 0.15);
+        } catch (e) {}
+    }
+
+    toggleSfx() {
+        this.sfxEnabled = !this.sfxEnabled;
+        this.initCtx();
+        if (this.sfxEnabled) {
+            this.initCapasContinuas();
+            this.ecosistemaAmbiental(); 
         } else {
-            document.body.classList.remove('bg-sky-active');
-            // Retraso para permitir que la opacidad del contenedor principal se apague suavemente 
-            // antes de pausar los keyframes internos.
-            setTimeout(() => {
-                if(!this.skyEnabled) this.skyContainer.classList.add('atmosfera-inactiva');
-            }, 1000);
+            clearTimeout(this.ambientTimeout);
+            if (this.windGainNode) this.windGainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.1);
+            if (this.leavesGainNode) this.leavesGainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.1);
+            if (this.cricketGainNode) this.cricketGainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.1);
         }
-        return this.skyEnabled;
+        return this.sfxEnabled;
+    }
+
+    toggleMusic() {
+        this.musicEnabled = !this.musicEnabled;
+        this.initCtx();
+        if (this.musicEnabled) {
+            this.ecosistemaMusical();
+        } else {
+            clearTimeout(this.musicTimeout);
+        }
+        return this.musicEnabled;
+    }
+
+    stopMusic() {
+        clearTimeout(this.musicTimeout);
+    }
+
+    resumeMusic() {
+        if (this.musicEnabled) {
+            clearTimeout(this.musicTimeout); 
+            this.ecosistemaMusical();
+        }
     }
 }

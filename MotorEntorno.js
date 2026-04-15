@@ -68,7 +68,6 @@ export class MotorEntorno {
             <div class="capa-cielo cielo-amanecer"></div>
 
             <div class="capa-estrellas"></div>
-
             <div class="capa-nubes" id="generador-nubes"></div>
 
             <div class="rueda-celeste">
@@ -81,63 +80,62 @@ export class MotorEntorno {
         this.generarNubesProcedurales();
     }
 
-    // --- NUEVO: ALGORITMO DE NUBES CÚMULOS (Base plana, múltiples esferas) ---
+    // --- ESCULTOR DE NUBES CÚMULOS (PARALLAX + CAOS MORFOLÓGICO) ---
     generarNubesProcedurales() {
         const contenedorNubes = document.getElementById('generador-nubes');
         if (!contenedorNubes) return;
         
         contenedorNubes.innerHTML = '';
-        
-        const numeroNubes = 5 + Math.floor(Math.random() * 4);
+        const numeroNubes = 6 + Math.floor(Math.random() * 5); // 6 a 10 nubes
         
         for(let i = 0; i < numeroNubes; i++) {
             const nube = document.createElement('div');
             nube.className = 'nube procedural';
             
             // FÍSICAS DE PARALLAX
-            const profundidad = Math.random(); // 0.0 lejano, 1.0 cercano
-            const escala = 0.2 + (profundidad * 1.0);
-            const duracionViaje = 150 - (profundidad * 110);
-            const opacidadBase = 0.15 + (profundidad * 0.55);
+            const profundidad = Math.random(); 
+            const escala = 0.2 + (profundidad * 1.5); // Nubes frontales mucho más grandes
+            const duracionViaje = 180 - (profundidad * 140); // 40s (rápidas/cerca) a 180s (lentas/lejos)
+            const opacidadBase = 0.15 + (profundidad * 0.7); // 15% a 85%
             const ordenCapa = Math.floor(profundidad * 10);
-            const alturaY = Math.random() * 45; 
-            const retrasoInicial = Math.random() * -150; 
-
-            // MORFOLOGÍA DE LA NUBE
-            const anchoNube = 100 + Math.random() * 150; // Ancho aleatorio entre 100px y 250px
-            nube.style.width = `${anchoNube}px`;
-            nube.style.height = `${anchoNube * 0.8}px`; // La altura del contenedor no importa, los círculos van pegados abajo
             
-            // Construimos los círculos internos (puffs)
-            const numPuffs = 3 + Math.floor(Math.random() * 5); // Cada nube tiene de 3 a 7 círculos
-            let puffsHTML = '';
+            // Posición inicial
+            const alturaY = Math.random() * 50; 
+            const retrasoInicial = Math.random() * -180; 
 
-            // Añadimos un rectángulo suavizado en la base para conectar todos los círculos y asegurar solidez
-            puffsHTML += `<div class="puff base-puff" style="width: 100%; height: 25px; left: 0;"></div>`;
+            // MORFOLOGÍA LOCA DE LA NUBE
+            const anchoNube = 120 + Math.random() * 200; 
+            nube.style.width = `${anchoNube}px`;
+            nube.style.height = `${anchoNube * 0.8}px`; 
+            
+            // Más cantidad de círculos y variación extrema de tamaño
+            const numPuffs = 5 + Math.floor(Math.random() * 8); 
+            let puffsHTML = `<div class="puff base-puff" style="width: 100%; height: 25px; left: 0;"></div>`;
 
             for(let j = 0; j < numPuffs; j++) {
-                // Diámetro del círculo
-                const size = 30 + Math.random() * (anchoNube * 0.5); 
+                // Diámetro caótico (algunos enormes, otros pequeñitos para romper la uniformidad)
+                const sizeW = 20 + Math.random() * (anchoNube * 0.7); 
+                const sizeH = sizeW * (0.8 + Math.random() * 0.4); // Círculos ligeramente ovalados
                 
-                // Posición X (left) dentro del ancho de la nube
-                const maxLeft = anchoNube - size;
+                const maxLeft = anchoNube - sizeW;
                 let leftPos = Math.random() * maxLeft;
 
-                // Forzamos que el primer círculo esté a la izquierda y el segundo a la derecha
-                // para que la nube no se vea "mordida" de los lados
-                if (j === 0) leftPos = Math.random() * (maxLeft * 0.2);
-                if (j === 1) leftPos = maxLeft - (Math.random() * (maxLeft * 0.2));
+                // Estructura base para no dejar huecos en los extremos
+                if (j === 0) leftPos = Math.random() * (maxLeft * 0.1);
+                if (j === 1) leftPos = maxLeft - (Math.random() * (maxLeft * 0.1));
 
-                puffsHTML += `<div class="puff" style="width: ${size}px; height: ${size}px; left: ${leftPos}px;"></div>`;
+                puffsHTML += `<div class="puff" style="width: ${sizeW}px; height: ${sizeH}px; left: ${leftPos}px;"></div>`;
             }
 
             nube.innerHTML = puffsHTML;
 
-            // Inyectamos las físicas de movimiento
+            // SOLUCIÓN AL BUG DEL PARALLAX: Pasamos la escala como una Variable CSS (--scale)
+            nube.style.setProperty('--scale', escala);
             nube.style.top = `${alturaY}%`;
-            nube.style.transform = `scale(${escala})`;
             nube.style.opacity = opacidadBase;
             nube.style.zIndex = ordenCapa;
+            
+            // La animación ahora respeta la variable CSS
             nube.style.animation = `flotar ${duracionViaje}s infinite linear ${retrasoInicial}s`;
             
             contenedorNubes.appendChild(nube);
@@ -149,7 +147,7 @@ export class MotorEntorno {
 
         const estilo = document.createElement('style');
         estilo.id = 'css-entorno';
-        const cicloSegundos = 120; 
+        const cicloSegundos = 180; // Aumentado a 3 minutos para transiciones más majestuosas
 
         estilo.innerHTML = `
             #sky-bg { background: none !important; overflow: hidden; }
@@ -157,10 +155,24 @@ export class MotorEntorno {
             body.bg-sky-active #sky-bg * { animation-play-state: running; }
 
             .capa-cielo { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; }
-            body.bg-sky-active .cielo-dia { background: linear-gradient(to bottom, #54b1f5 0%, #e0f2fe 80%); animation: cicloDia ${cicloSegundos}s infinite linear; }
-            body.bg-sky-active .cielo-atardecer { background: linear-gradient(to bottom, #4c3b71 0%, #f68989 60%, #ffc371 100%); animation: cicloAtardecer ${cicloSegundos}s infinite linear; }
-            body.bg-sky-active .cielo-noche { background: linear-gradient(to bottom, #0b1320 0%, #1a2a42 100%); animation: cicloNoche ${cicloSegundos}s infinite linear; }
-            body.bg-sky-active .cielo-amanecer { background: linear-gradient(to bottom, #8ab3d9 0%, #ffb07c 80%); animation: cicloAmanecer ${cicloSegundos}s infinite linear; }
+            
+            /* --- COLORES VIBRANTES DE LA VIDA REAL --- */
+            body.bg-sky-active .cielo-dia { 
+                background: linear-gradient(to bottom, #3b8d99 0%, #6b6b83 40%, #aa4b6b 100%); 
+                animation: cicloDia ${cicloSegundos}s infinite linear; 
+            }
+            body.bg-sky-active .cielo-atardecer { 
+                background: linear-gradient(to bottom, #1a1a3a 0%, #4a2b5e 40%, #a23b53 70%, #f67a4b 100%); 
+                animation: cicloAtardecer ${cicloSegundos}s infinite linear; 
+            }
+            body.bg-sky-active .cielo-noche { 
+                background: linear-gradient(to bottom, #05070a 0%, #151b29 60%, #1d2b45 100%); 
+                animation: cicloNoche ${cicloSegundos}s infinite linear; 
+            }
+            body.bg-sky-active .cielo-amanecer { 
+                background: linear-gradient(to bottom, #2c1b4d 0%, #855988 40%, #e38471 70%, #ffce8e 100%); 
+                animation: cicloAmanecer ${cicloSegundos}s infinite linear; 
+            }
 
             .capa-estrellas {
                 position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;
@@ -175,24 +187,44 @@ export class MotorEntorno {
             }
             body.bg-sky-active .capa-estrellas { animation: cicloNoche ${cicloSegundos}s infinite linear, parpadeo 4s infinite alternate ease-in-out; }
 
-            .rueda-celeste { position: absolute; top: 50%; left: 50%; width: 150vh; height: 150vh; margin-left: -75vh; margin-top: -25vh; border-radius: 50%; z-index: 3; }
+            /* --- RUEDA CELESTE GIGANTE (VMAX) --- */
+            .rueda-celeste { 
+                position: absolute; 
+                top: 50%; left: 50%; 
+                width: 120vmax; height: 120vmax; 
+                margin-left: -60vmax; 
+                margin-top: -35vmax; /* Eje ligeramente por debajo del centro para aplanar el arco */
+                border-radius: 50%; z-index: 3; 
+            }
             body.bg-sky-active .rueda-celeste { animation: rotacionCeleste ${cicloSegundos}s infinite linear; }
 
             .astro { position: absolute; left: 50%; border-radius: 50%; }
-            .sol { width: 400px; height: 400px; margin-left: -200px; top: -200px; background: radial-gradient(circle, rgba(255,245,200,0.8) 0%, rgba(255,235,160,0.2) 40%, rgba(255,255,255,0) 70%); }
-            .luna { width: 60px; height: 60px; margin-left: -30px; bottom: -30px; background: #f4f6f0; box-shadow: 0 0 30px rgba(255, 255, 255, 0.6), inset -10px -10px 15px rgba(0,0,0,0.2); }
+            
+            /* Sol etéreo */
+            .sol { 
+                width: 500px; height: 500px; 
+                margin-left: -250px; top: -250px; 
+                background: radial-gradient(circle, rgba(255,245,200,0.9) 0%, rgba(255,235,160,0.3) 30%, rgba(255,200,100,0.1) 50%, rgba(255,255,255,0) 70%); 
+            }
+            
+            /* Luna fantasmal */
+            .luna { 
+                width: 80px; height: 80px; 
+                margin-left: -40px; bottom: -40px; 
+                background: #f4f6f0; 
+                box-shadow: 0 0 50px rgba(255, 255, 255, 0.5), inset -12px -12px 18px rgba(0,0,0,0.2); 
+            }
             body.bg-sky-active .luna { animation: opacidadLuna ${cicloSegundos}s infinite linear; }
 
-            /* --- NUEVO CSS PARA CÚMULOS PROCEDURALES --- */
-            .capa-nubes { position: absolute; top: 0; left: 0; width: 100%; height: 60%; z-index: 4; }
+            /* --- NUBES --- */
+            .capa-nubes { position: absolute; top: 0; left: 0; width: 100%; height: 70%; z-index: 4; }
             
             .nube.procedural {
                 position: absolute;
-                /* El filtro blur fusiona visualmente los círculos dándoles esa textura esponjosa */
-                filter: blur(4px); 
+                filter: blur(5px); 
+                /* Se elimina el transform fijo aquí, la animación toma el control usando var(--scale) */
             }
             
-            /* Todas las esferas se anclan obligatoriamente a 'bottom: 0' */
             .puff {
                 position: absolute;
                 background: white;
@@ -200,26 +232,25 @@ export class MotorEntorno {
                 bottom: 0; 
             }
             
-            .base-puff {
-                border-radius: 12px !important; /* Bordes suaves para el puente base */
-            }
+            .base-puff { border-radius: 15px !important; }
 
-            body.bg-sky-active .nube.procedural {
-                animation-play-state: running;
-            }
+            body.bg-sky-active .nube.procedural { animation-play-state: running; }
 
             /* --- KEYFRAMES --- */
             @keyframes rotacionCeleste { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 50% { transform: rotate(180deg); } 75% { transform: rotate(270deg); } 100% { transform: rotate(360deg); } }
-            @keyframes opacidadLuna { 0%, 30% { opacity: 0; } 40%, 60% { opacity: 0.85; } 70%, 100% { opacity: 0; } }
+            @keyframes opacidadLuna { 0%, 35% { opacity: 0; } 45%, 55% { opacity: 0.9; } 65%, 100% { opacity: 0; } }
+            
             @keyframes cicloDia { 0%, 25% { opacity: 1; } 35%, 85% { opacity: 0; } 95%, 100% { opacity: 1; } }
             @keyframes cicloAtardecer { 0%, 15% { opacity: 0; } 25%, 35% { opacity: 1; } 45%, 100% { opacity: 0; } }
             @keyframes cicloNoche { 0%, 35% { opacity: 0; } 45%, 75% { opacity: 1; } 85%, 100% { opacity: 0; } }
             @keyframes cicloAmanecer { 0%, 75% { opacity: 0; } 85%, 95% { opacity: 1; } 100% { opacity: 0; } }
 
+            /* EL TRUCO MAESTRO: Transform lee la variable inyectada por JS */
             @keyframes flotar {
-                0% { transform: translateX(-20vw) scale(var(--scale, 1)); }
+                0% { transform: translateX(-30vw) scale(var(--scale, 1)); }
                 100% { transform: translateX(120vw) scale(var(--scale, 1)); }
             }
+            
             @keyframes parpadeo { 0% { filter: opacity(0.3); } 100% { filter: opacity(1); } }
         `;
         document.head.appendChild(estilo);

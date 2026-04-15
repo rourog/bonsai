@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bonsái Paramétrico - Arquitectura Modular</title>
+    <title>Bonsái Paramétrico - UI Compacta</title>
     <style>
         :root {
             --bg-color: #f5f5f7;
@@ -11,201 +11,80 @@
             --ui-bg: #ffffff;
             --border: #d1d1d6;
         }
-
-        body, html {
-            margin: 0; padding: 0; width: 100%; height: 100vh;
-            background-color: var(--bg-color);
-            font-family: 'SF Mono', 'Roboto Mono', Menlo, monospace;
-            overflow: hidden;
-            transition: background-color 1s ease;
-        }
-
-        /* --- FONDO CIELO --- */
-        #sky-bg {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(to bottom, #a1c4fd 0%, #ffffff 80%);
-            opacity: 0;
-            transition: opacity 1s ease;
-            z-index: 0;
-            pointer-events: none;
-        }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100vh; background-color: var(--bg-color); font-family: 'SF Mono', 'Roboto Mono', Menlo, monospace; overflow: hidden; transition: background-color 1s ease; }
+        
+        #sky-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, #a1c4fd 0%, #ffffff 80%); opacity: 0; transition: opacity 1s ease; z-index: 0; pointer-events: none; }
         body.bg-sky-active #sky-bg { opacity: 1; }
-
-        /* --- CONTENEDOR PRINCIPAL --- */
-        #app-container {
-            display: flex;
-            flex-direction: row;
-            width: 100%;
-            height: 100vh;
-            position: relative;
-            z-index: 1;
-        }
-
-        #canvas-container {
-            flex-grow: 1; 
-            position: relative;
-            height: 100vh; 
-            display: flex; justify-content: center; align-items: center;
-            transition: padding 0.5s ease; 
-        }
-
+        
+        #app-container { display: flex; flex-direction: row; width: 100%; height: 100vh; position: relative; z-index: 1; }
+        #canvas-container { flex-grow: 1; position: relative; height: 100vh; display: flex; justify-content: center; align-items: center; transition: padding 0.5s ease; }
         svg { width: 100%; height: 100%; display: block; z-index: 2; position: relative;}
-
-        .rama-activa { cursor: crosshair; }
-        .rama-activa:hover { opacity: 0.7; }
-        .brote-activo { cursor: crosshair; }
-        .brote-activo:hover path { fill: #e67e22 !important; }
-        .flora-activa { cursor: crosshair; }
-        .flora-activa:hover path { fill: #e74c3c !important; }
-
-        /* --- UI FLOTANTE MINIMALISTA --- */
-        #floating-ui {
-            position: absolute;
-            bottom: 30px;
-            left: 25px;
-            right: 25px;
-            display: flex;
-            justify-content: space-between; 
-            align-items: flex-end;
-            z-index: 10;
-            pointer-events: none; 
+        
+        .rama-activa { cursor: crosshair; } .rama-activa:hover { opacity: 0.7; }
+        .brote-activo { cursor: crosshair; } .brote-activo:hover path { fill: #e67e22 !important; }
+        .flora-activa { cursor: crosshair; } .flora-activa:hover path { fill: #e74c3c !important; }
+        
+        /* --- UI FLOTANTE CON ANIMACIÓN DE INACTIVIDAD --- */
+        #floating-ui { 
+            position: absolute; bottom: 30px; left: 25px; right: 25px; 
+            display: flex; justify-content: space-between; align-items: flex-end; 
+            z-index: 10; pointer-events: none; 
+            transition: opacity 0.5s ease, transform 0.5s ease; 
+            transform: translateY(0);
         }
-
         #floating-ui > * { pointer-events: auto; }
-
-        .btn-zen-main {
-            width: 65px; 
-            height: 65px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
-            color: white;
-            font-size: 0.95rem;
-            font-weight: bold;
-            font-family: inherit;
-            letter-spacing: 1px;
-            border: none;
-            box-shadow: 0 4px 15px rgba(102, 166, 255, 0.4);
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s;
-            position: relative;
-            overflow: hidden; 
+        
+        /* Magia Zen: Oculta AMBOS botones cuando no mueves el ratón */
+        body.zen-active.zen-idle #floating-ui { 
+            opacity: 0; pointer-events: none; transform: translateY(20px); 
         }
+        /* Ya NO ocultamos el engrane por la fuerza en modo Zen */
 
+        .btn-zen-main { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%); color: white; font-size: 0.9rem; font-weight: bold; font-family: inherit; letter-spacing: 1px; border: none; box-shadow: 0 4px 15px rgba(102, 166, 255, 0.4); cursor: pointer; display: flex; justify-content: center; align-items: center; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s; position: relative; overflow: hidden; }
         .btn-zen-main:active { transform: scale(0.92); }
-
-        .btn-zen-main::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            background: rgba(255, 255, 255, 0.6);
-            border-radius: 50%;
-            transform: translate(-50%, -50%) scale(0);
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .btn-zen-main.active::after {
-            animation: inner-ripple-zen 2.5s infinite;
-        }
-
-        @keyframes inner-ripple-zen {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            10% { opacity: 1; }
-            80% { transform: translate(-50%, -50%) scale(12); opacity: 0; }
-            100% { transform: translate(-50%, -50%) scale(12); opacity: 0; }
-        }
-
-        .btn-config {
-            background: rgba(255, 255, 255, 0.9);
-            border: 1px solid var(--border);
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            font-size: 1.6rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: var(--ui-text);
-            cursor: pointer;
-            backdrop-filter: blur(5px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-            transition: opacity 0.5s, transform 0.2s;
-            padding-bottom: 2px; 
-        }
+        .btn-zen-main::after { content: ''; position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: rgba(255, 255, 255, 0.6); border-radius: 50%; transform: translate(-50%, -50%) scale(0); opacity: 0; pointer-events: none; }
+        .btn-zen-main.active::after { animation: inner-ripple-zen 2.5s infinite; }
+        @keyframes inner-ripple-zen { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 10% { opacity: 1; } 80% { transform: translate(-50%, -50%) scale(10); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(10); opacity: 0; } }
+        
+        .btn-config { background: rgba(255, 255, 255, 0.9); border: 1px solid var(--border); width: 45px; height: 45px; border-radius: 50%; font-size: 1.4rem; display: flex; justify-content: center; align-items: center; color: var(--ui-text); cursor: pointer; backdrop-filter: blur(5px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); transition: opacity 0.5s, transform 0.2s; padding-bottom: 2px; }
         .btn-config:active { transform: scale(0.9); }
-
-        /* --- DASHBOARD --- */
-        #dashboard {
-            width: 340px; 
-            min-width: 340px; 
-            height: 100vh;
-            background: rgba(255, 255, 255, 0.98); 
-            border-left: 1px solid var(--border);
-            padding: 1.5rem; 
-            display: flex; flex-direction: column; gap: 1rem;
-            overflow-y: auto; box-sizing: border-box; z-index: 20;
-            backdrop-filter: blur(15px);
-            margin-right: 0;
-            transition: margin-right 0.5s cubic-bezier(0.4, 0, 0.2, 1); 
-        }
-
-        .dashboard-header {
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;
-        }
-
-        .btn-close {
-            background: transparent; border: none; font-size: 1.5rem; color: var(--ui-text); cursor: pointer; padding: 0; line-height: 1; display: none; 
-        }
-
-        .actions, .presets { display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
-        button.action-btn {
-            background: transparent; border: 1px solid var(--ui-text); color: var(--ui-text); padding: 0.4rem 1rem; font-family: inherit; font-size: 0.75rem; cursor: pointer; text-transform: uppercase; transition: all 0.2s; flex-grow: 1; border-radius: 4px;
-        }
+        
+        /* --- DASHBOARD COMPACTADO --- */
+        #dashboard { width: 320px; min-width: 320px; height: 100vh; background: rgba(255, 255, 255, 0.98); border-left: 1px solid var(--border); padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: 0.8rem; overflow-y: auto; box-sizing: border-box; z-index: 20; backdrop-filter: blur(15px); margin-right: 0; transition: margin-right 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; }
+        .btn-close { background: transparent; border: none; font-size: 1.5rem; color: var(--ui-text); cursor: pointer; padding: 0; line-height: 1; display: none; }
+        
+        .actions, .presets { display: flex; justify-content: center; gap: 0.4rem; flex-wrap: wrap; }
+        button.action-btn { background: transparent; border: 1px solid var(--ui-text); color: var(--ui-text); padding: 0.3rem 0.8rem; font-family: inherit; font-size: 0.7rem; cursor: pointer; text-transform: uppercase; transition: all 0.2s; flex-grow: 1; border-radius: 4px; }
         button.action-btn:hover { background: var(--ui-text); color: var(--ui-bg); }
         button.primary { background: var(--ui-text); color: var(--ui-bg); font-weight: bold; }
         button.primary:hover { background: transparent; color: var(--ui-text); }
         button.active-toggle { background: #e0e0e0; color: #000; font-weight: bold; }
         
-        button.preset-btn { border-color: #999; color: #555; padding: 0.3rem 0.5rem; font-size: 0.7rem; border-radius: 4px; background: transparent; cursor: pointer; font-family: inherit; transition: 0.2s;}
-        button.preset-btn:hover { background: rgba(0,0,0,0.05); border-color: #333; color: #333;}
-
-        .parameters { display: flex; flex-direction: column; gap: 1rem; font-size: 0.75rem; margin-top: 0.5rem; }
-        .control-group { display: flex; flex-direction: column; gap: 0.3rem; }
-        .control-group label { display: flex; justify-content: space-between; color: var(--ui-text); font-weight: bold; }
-        input[type="range"], select { width: 100%; cursor: pointer; padding: 4px; font-family: inherit; border: 1px solid var(--border); background: transparent; border-radius: 4px;}
+        /* Botones Cíclicos (Morfología) */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        button.cyclic-btn { font-size: 0.65rem; padding: 0.4rem 0.2rem; text-align: center; border-color: #aaa; background: #fafafa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        button.cyclic-btn span { font-weight: bold; color: var(--ui-text); }
         
-        #stats { 
-            position: absolute; top: 15px; left: 20px; font-size: 0.7rem; color: #aaa; 
-            z-index: 5; transition: opacity 0.5s; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
-        }
-
-        /* --- COMPORTAMIENTO MODO ZEN --- */
-        body.zen-active .btn-config { opacity: 0; pointer-events: none; } 
-        body.zen-active .btn-zen-main { opacity: 0.7; } 
-        body.zen-active .btn-zen-main:hover { opacity: 1; }
+        button.preset-btn { border-color: #aaa; color: #555; padding: 0.2rem 0.4rem; font-size: 0.65rem; border-radius: 4px; background: transparent; cursor: pointer; font-family: inherit; transition: 0.2s;}
+        button.preset-btn:hover { background: rgba(0,0,0,0.05); border-color: #333; color: #333;}
+        
+        .parameters { display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.7rem; margin-top: 0.2rem; }
+        .control-group { display: flex; flex-direction: column; gap: 0.1rem; }
+        .control-group label { display: flex; justify-content: space-between; color: var(--ui-text); font-weight: bold; }
+        input[type="range"] { width: 100%; cursor: pointer; height: 4px; margin: 4px 0; }
+        
+        #stats { position: absolute; top: 15px; left: 20px; font-size: 0.7rem; color: #aaa; z-index: 5; transition: opacity 0.5s; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         body.zen-idle #stats { opacity: 0; } 
-
-        /* --- RESPONSIVE DESKTOP --- */
+        
         @media (min-width: 769px) { 
             .btn-config { display: none; } 
             body.zen-active #dashboard { margin-right: -340px; }
         }
-
-        /* --- RESPONSIVE MÓVIL --- */
         @media (max-width: 768px) {
             #app-container { flex-direction: column; }
             #canvas-container { position: absolute; width: 100%; }
-            #dashboard {
-                position: fixed; top: 0; right: -100%; width: 85%; max-width: 320px; box-shadow: -5px 0 25px rgba(0,0,0,0.15); transition: right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-                margin-right: 0 !important; 
-            }
+            #dashboard { position: fixed; top: 0; right: -100%; width: 85%; max-width: 320px; box-shadow: -5px 0 25px rgba(0,0,0,0.15); transition: right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); margin-right: 0 !important; }
             #dashboard.open { right: 0; }
             .btn-close { display: block; } 
         }
@@ -218,7 +97,6 @@
     <div id="app-container">
         <div id="canvas-container">
             <div id="stats">NODOS: 1 | AÑOS: 0.0</div>
-            
             <svg id="bonsai-svg" viewBox="-250 -485 500 500">
                 <g id="layer-pot"></g>
                 <g id="layer-tree"></g>
@@ -234,29 +112,27 @@
 
         <div id="dashboard">
             <div class="dashboard-header">
-                <span class="section-title" style="border: none; margin: 0; color: #333; font-size: 0.9rem;">AJUSTES DEL MOTOR</span>
+                <span class="section-title" style="border: none; margin: 0; color: #333; font-size: 0.85rem;">AJUSTES DEL MOTOR</span>
                 <button id="btn-close-config" class="btn-close">&times;</button>
             </div>
 
             <div class="actions">
-                <button id="btn-reset" class="action-btn">Plantar Semilla</button>
+                <button id="btn-reset" class="action-btn">Semilla</button>
                 <button id="btn-mutar" class="action-btn primary">Mutar</button>
             </div>
 
-            <div class="actions" style="margin-top: 0.5rem;">
+            <div class="actions">
                 <button id="btn-hojas" class="action-btn active-toggle">Hojas</button>
                 <button id="btn-flores" class="action-btn active-toggle">Flora</button>
             </div>
 
-            <div class="actions" style="margin-top: 0.5rem;">
+            <div class="actions">
                 <button id="btn-sfx" class="action-btn" style="border-color: #e67e22; color: #e67e22;">🍃 SFX: OFF</button>
                 <button id="btn-music" class="action-btn" style="border-color: #3498db; color: #3498db;">🎵 MÚSICA: OFF</button>
-            </div>
-            <div class="actions" style="margin-top: 0.5rem;">
                 <button id="btn-fondo" class="action-btn" style="border-color: #89f7fe; color: #3498db;">🌅 CIELO: OFF</button>
             </div>
 
-            <div class="section-title" style="margin-top: 1rem;">PRESETS</div>
+            <div class="section-title" style="margin-top: 0.5rem;">PRESETS</div>
             <div class="presets">
                 <button class="preset-btn" onclick="aplicarPreset('pino')">Pino</button>
                 <button class="preset-btn" onclick="aplicarPreset('roble')">Roble</button>
@@ -266,14 +142,13 @@
                 <button class="preset-btn" onclick="aplicarPreset('limonero')" style="border-color: #f1c40f; color: #b7950b;">Limonero</button>
             </div>
 
-            <div class="section-title" style="margin-top: 1rem;">CONFIGURACIÓN FÍSICA</div>
+            <div class="section-title" style="margin-top: 0.5rem;">CONFIGURACIÓN FÍSICA</div>
             
-            <div id="ui-morfologia" class="parameters"></div>
+            <div id="ui-morfologia"></div>
             
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 1rem 0;">
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 0.5rem 0;">
             
             <div id="ui-parametros" class="parameters"></div>
-
         </div>
     </div>
 

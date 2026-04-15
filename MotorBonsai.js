@@ -1,3 +1,28 @@
+// MotorBonsai.js
+
+// --- SISTEMA DE SEMILLAS (PRNG MULBERRY32) ---
+let semillaActual = 0;
+
+export function setSeed(textoSemilla) {
+    let hash = 0;
+    for (let i = 0; i < textoSemilla.length; i++) {
+        hash = Math.imul(31, hash) + textoSemilla.charCodeAt(i) | 0;
+    }
+    semillaActual = hash;
+}
+
+export function seededRandom() {
+    let t = semillaActual += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
+
+export function rnd(min, max) { 
+    return seededRandom() * (max - min) + min; 
+}
+// ---------------------------------------------
+
 export const DICCIONARIO_BOTANICO = {
     hojas: [
         { id: 'huso', nombre: 'Huso Afilado' },
@@ -18,7 +43,6 @@ export const DICCIONARIO_BOTANICO = {
     ]
 };
 
-// Definimos dinámicamente los parámetros numéricos
 export const PARAMETROS_MOTOR = [
     { key: 'viento', id: 'p-viento', label: 'Intensidad Viento (%)', min: 0, max: 100, step: 1, default: 15, color: '#3498db' },
     { key: 'edadRamificacion', id: 'p-edadRam', label: 'Edad de Ramificación', min: 1.5, max: 5.0, step: 0.1, default: 3.0 },
@@ -32,25 +56,17 @@ export const PARAMETROS_MOTOR = [
     { key: 'inicioFloracion', id: 'p-flor', label: 'Inicio Floración (Edad)', min: 2, max: 8, step: 1, default: 6 }
 ];
 
-
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MAX_AGE = 8;
 const TENSION_ANIMACION = 0.08; 
 
-// Paleta base biológica
 const C_YOUNG = { r: 93,  g: 125, b: 60 };
-
-// Genética de Corteza
 const BARK_PALETTE = [
     { r: 70, g: 50, b: 40 }, { r: 90, g: 70, b: 50 }, { r: 110, g: 90, b: 70 }, 
     { r: 50, g: 50, b: 50 }, { r: 80, g: 80, b: 80 }, { r: 100, g: 80, b: 60 }  
 ];
 
 const LEAF_COLORS = ['#1f362a', '#2c4c3b', '#3e6e5a', '#5d7d3c'];
-
-export function rnd(min, max) { 
-    return Math.random() * (max - min) + min; 
-}
 
 export function generarPathHoja(forma, w, l) {
     switch(forma) {
@@ -65,7 +81,7 @@ export function generarPathHoja(forma, w, l) {
 
 export class FrutoFlor {
     constructor(tipo, ctx) {
-        this.ctx = ctx; // Contiene las capas SVG y el motor de audio
+        this.ctx = ctx; 
         this.offsetX = rnd(-15, 15);
         this.offsetY = rnd(-15, 15);
         this.escalaTarget = rnd(0.8, 1.4);
@@ -74,11 +90,11 @@ export class FrutoFlor {
         
         if (tipo === 'aleatorio') {
             const tipos = ['flor-rosa', 'flor-blanca', 'flor-amarilla', 'limon', 'baya-roja', 'platano'];
-            tipo = tipos[Math.floor(Math.random() * tipos.length)];
+            tipo = tipos[Math.floor(seededRandom() * tipos.length)];
         }
         
         const data = this.obtenerDatosMorfologicos(tipo);
-        this.anguloCae = (tipo === 'limon' || tipo === 'platano') ? rnd(10, 45) * (Math.random() > 0.5 ? 1 : -1) : rnd(-15, 15);
+        this.anguloCae = (tipo === 'limon' || tipo === 'platano') ? rnd(10, 45) * (seededRandom() > 0.5 ? 1 : -1) : rnd(-15, 15);
 
         this.dom = document.createElementNS(SVG_NS, "path");
         this.dom.setAttribute("d", data.path);
@@ -89,9 +105,7 @@ export class FrutoFlor {
         
         this.ctx.layerFlowers.appendChild(this.dom);
         
-        if(this.ctx.audioMotor) {
-            this.ctx.audioMotor.playPop();
-        }
+        if(this.ctx.audioMotor) this.ctx.audioMotor.playPop();
     }
 
     obtenerDatosMorfologicos(tipo) {
@@ -106,15 +120,11 @@ export class FrutoFlor {
         }
     }
 
-    cortar() { 
-        this.podado = true; 
-        this.dom.remove(); 
-    }
+    cortar() { this.podado = true; this.dom.remove(); }
     
     animar(padreX, padreY, parentWindAngle, tiempoViento, windIntensity, showFlowers) {
         if(this.podado) return;
         this.escalaActual += (this.escalaTarget - this.escalaActual) * TENSION_ANIMACION;
-        
         let swing = Math.sin(tiempoViento * 2.5 + this.offsetX) * windIntensity * 20; 
         let windRotDeg = (parentWindAngle * 180 / Math.PI) + swing;
 
@@ -149,15 +159,15 @@ export class Brote {
         if (this.podado) return;
         let probHoja = 1 - Math.pow(1 - 0.85, delta);
         
-        if (this.hojas.length < params.maxHojas && Math.random() < probHoja) {
+        if (this.hojas.length < params.maxHojas && seededRandom() < probHoja) {
             let variabilidadCae = rnd(10, 45);
-            let direccionCae = Math.random() > 0.5 ? 1 : -1;
+            let direccionCae = seededRandom() > 0.5 ? 1 : -1;
 
             const hojaObj = {
                 offsetX: rnd(-10, 10), offsetY: rnd(-10, 10),
                 escalaTarget: rnd(0.7, 1.3), escalaActual: 0,
                 anguloCae: variabilidadCae * direccionCae,
-                color: LEAF_COLORS[Math.floor(Math.random() * LEAF_COLORS.length)],
+                color: LEAF_COLORS[Math.floor(seededRandom() * LEAF_COLORS.length)],
                 dom: document.createElementNS(SVG_NS, "path")
             };
             
@@ -171,10 +181,7 @@ export class Brote {
         }
     }
 
-    cortar() { 
-        this.podado = true; 
-        this.g.remove(); 
-    }
+    cortar() { this.podado = true; this.g.remove(); }
     
     animar(padreX, padreY, parentWindAngle, tiempoViento, windIntensity, showLeaves) {
         if (this.podado) return;
@@ -204,10 +211,10 @@ export class Rama {
         this.gen = gen;
         this.age = 0; 
         this.podada = false; 
-        this.seed = Math.random() * 1000; 
-        this.ctx = ctx; // Contexto de SVG y Audio
+        this.seed = seededRandom() * 1000; 
+        this.ctx = ctx; 
+        this.esAccesoria = false; // CORRECCIÓN: Etiqueta inicializada
         
-        // Genética de color heredada
         if (this.padre) {
             this.baseBarkColor = this.padre.baseBarkColor;
         } else {
@@ -216,26 +223,20 @@ export class Rama {
 
         this.startX = startX; this.startY = startY;
         this.angulo = anguloInicial;
-        
         this.curvatura = rnd(-params.maxAngle, params.maxAngle) + ((-90 - this.angulo) * 0.1); 
         
         let v = params.lenVariance;
         this.lenMultiplier = this.gen === 0 ? (1.0 + rnd(-v * 0.5, v * 0.5)) : (1.0 + rnd(-v, v));
         
-        this.lenObj = 0; 
-        this.lenAct = 0; 
-        this.grosorBaseAct = 0; 
-        this.grosorPuntaAct = 0;
+        this.lenObj = 0; this.lenAct = 0; 
+        this.grosorBaseAct = 0; this.grosorPuntaAct = 0;
         
         this.grosorBrutoObj = 2.0; 
         this.grosorBaseObj = this.padre ? Math.min(this.grosorBrutoObj, this.padre.grosorPuntaObj) : this.grosorBrutoObj; 
         this.grosorPuntaObj = this.grosorBaseObj * 0.5;
         
-        this.hijos = [];
-        this.brotes = [];
-        this.flora = [];
-        this.haBifurcado = false;
-        this.tieneAccesoria = false;
+        this.hijos = []; this.brotes = []; this.flora = [];
+        this.haBifurcado = false; this.tieneAccesoria = false;
         this.currentFill = `rgb(${C_YOUNG.r}, ${C_YOUNG.g}, ${C_YOUNG.b})`;
         
         this.g = document.createElementNS(SVG_NS, "g");
@@ -267,9 +268,7 @@ export class Rama {
         }
 
         this.grosorBaseObj = this.grosorBrutoObj;
-        if (this.padre) {
-            this.grosorBaseObj = Math.min(this.grosorBaseObj, this.padre.grosorPuntaObj);
-        }
+        if (this.padre) this.grosorBaseObj = Math.min(this.grosorBaseObj, this.padre.grosorPuntaObj);
         
         let ratioMadurez = Math.min(1, this.age / MAX_AGE);
         let taper = 0.5 + (0.5 * ratioMadurez); 
@@ -281,7 +280,7 @@ export class Rama {
         if (this.gen > 0 && params.maxHojas > 0) { 
             let maxBrotes = (this.hijos.length === 0) ? 5 : 2; 
             let probBrote = 1 - Math.pow(1 - 0.75, delta);
-            if (this.brotes.length < maxBrotes && Math.random() < probBrote) {
+            if (this.brotes.length < maxBrotes && seededRandom() < probBrote) {
                 this.brotes.push(new Brote(this.endXAct || this.startX, this.endYAct || this.startY, this.angulo, this.ctx));
             }
         }
@@ -290,7 +289,7 @@ export class Rama {
             let esRamaTerminal = this.gen >= params.maxGen - 2;
             let probFlora = 1 - Math.pow(1 - 0.60, delta);
             if (this.age >= params.inicioFloracion && esRamaTerminal) {
-                if (this.flora.length < 4 && Math.random() < probFlora) {
+                if (this.flora.length < 4 && seededRandom() < probFlora) {
                     this.flora.push(new FrutoFlor(params.tipoFlora, this.ctx));
                 }
             }
@@ -300,26 +299,29 @@ export class Rama {
 
         if (this.age >= edadBifurcacion && this.gen < params.maxGen - 1 && !this.haBifurcado) {
             let prob = this.gen === 0 ? 0.90 : params.branchProb;
-            if (Math.random() < prob) {
+            if (seededRandom() < prob) {
                 let spread = rnd(15, params.maxAngle);
-                this.crearHijo(this.angulo + spread, params);
-                this.crearHijo(this.angulo - spread, params);
+                this.crearHijo(this.angulo + spread, params, false);
+                this.crearHijo(this.angulo - spread, params, false);
             } else {
-                this.crearHijo(this.angulo + rnd(-15, 15), params);
+                this.crearHijo(this.angulo + rnd(-15, 15), params, false);
             }
             this.haBifurcado = true;
         }
 
         if (this.age >= edadBifurcacion + 1.0 && this.gen > 1 && this.gen < params.maxGen - 1 && !this.tieneAccesoria) {
-            if (Math.random() < params.accProb) {
-                this.crearHijo(this.angulo + rnd(30, params.maxAngle) * (Math.random() > 0.5 ? 1 : -1), params); 
+            if (seededRandom() < params.accProb) {
+                // CORRECCIÓN BUG ACCESORIA: Pasamos true como tercer argumento
+                this.crearHijo(this.angulo + rnd(30, params.maxAngle) * (seededRandom() > 0.5 ? 1 : -1), params, true); 
                 this.tieneAccesoria = true;
             }
         }
     }
 
-    crearHijo(angulo, params) {
-        this.hijos.push(new Rama(this.gen + 1, this.endXAct || this.startX, this.endYAct || this.startY, angulo, this, params, this.ctx));
+    crearHijo(angulo, params, esAcc = false) {
+        let hijo = new Rama(this.gen + 1, this.endXAct || this.startX, this.endYAct || this.startY, angulo, this, params, this.ctx);
+        hijo.esAccesoria = esAcc; // Inyecta la propiedad morfológica
+        this.hijos.push(hijo);
     }
 
     cortar() {
@@ -390,9 +392,7 @@ export class Rama {
         let perturbMid = Math.sin(this.seed + midX * 0.1) * amplitudRugosidad;
         let perturbFin = Math.sin(this.seed + midY * 0.1) * amplitudRugosidad;
 
-        rBase += perturbBase; 
-        let rMid = (rBase + rFin) / 2 + perturbMid; 
-        rFin += perturbFin;
+        rBase += perturbBase; let rMid = (rBase + rFin) / 2 + perturbMid; rFin += perturbFin;
 
         let nInicioX = Math.cos(angRadInicio - Math.PI/2); let nInicioY = Math.sin(angRadInicio - Math.PI/2);
         let nMidX = Math.cos(angRadMid - Math.PI/2); let nMidY = Math.sin(angRadMid - Math.PI/2);

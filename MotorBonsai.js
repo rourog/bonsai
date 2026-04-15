@@ -1,4 +1,37 @@
-// MotorBonsai.js
+export const DICCIONARIO_BOTANICO = {
+    hojas: [
+        { id: 'huso', nombre: 'Huso Afilado' },
+        { id: 'ovalada', nombre: 'Oval Estándar' },
+        { id: 'circular', nombre: 'Circular Brote' },
+        { id: 'larga', nombre: 'Larga Sauce' },
+        { id: 'arce', nombre: 'Arce Lobulada' }
+    ],
+    flora: [
+        { id: 'aleatorio', nombre: 'Caos' },
+        { id: 'flor-rosa', nombre: 'Flores Rosas' },
+        { id: 'flor-blanca', nombre: 'Flores Blancas' },
+        { id: 'flor-amarilla', nombre: 'Flores Amarillas' },
+        { id: 'limon', nombre: 'Limones' },
+        { id: 'baya-roja', nombre: 'Baya Roja' },
+        { id: 'platano', nombre: 'Plátanos' },
+        { id: 'ninguno', nombre: 'Ninguno' }
+    ]
+};
+
+// Definimos dinámicamente los parámetros numéricos
+export const PARAMETROS_MOTOR = [
+    { key: 'viento', id: 'p-viento', label: 'Intensidad Viento (%)', min: 0, max: 100, step: 1, default: 15, color: '#3498db' },
+    { key: 'edadRamificacion', id: 'p-edadRam', label: 'Edad de Ramificación', min: 1.5, max: 5.0, step: 0.1, default: 3.0 },
+    { key: 'baseLength', id: 'p-length', label: 'Longitud Base', min: 5, max: 30, step: 1, default: 18 },
+    { key: 'lenVariance', id: 'p-lenVar', label: 'Varianza Longitud (%)', min: 0, max: 100, step: 1, default: 20 },
+    { key: 'maxAngle', id: 'p-angle', label: 'Ángulo Nacimiento (°)', min: 5, max: 80, step: 1, default: 45 },
+    { key: 'branchProb', id: 'p-branch', label: 'Prob. Ramificación (%)', min: 0, max: 100, step: 1, default: 65 },
+    { key: 'accProb', id: 'p-acc', label: 'Prob. Rama Media (%)', min: 0, max: 100, step: 1, default: 30 },
+    { key: 'maxGen', id: 'p-gen', label: 'Límite Generacional', min: 3, max: 8, step: 1, default: 6 },
+    { key: 'maxHojas', id: 'p-hojas', label: 'Densidad Follaje (Max)', min: 0, max: 30, step: 1, default: 12 },
+    { key: 'inicioFloracion', id: 'p-flor', label: 'Inicio Floración (Edad)', min: 2, max: 8, step: 1, default: 6 }
+];
+
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MAX_AGE = 8;

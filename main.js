@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR MEJORADO: MUERTE ESTRUCTURAL Y OPTIMIZADA ---
+// --- ORQUESTADOR ACELERADO Y FÍSICA MEJORADA ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -162,7 +162,6 @@ function iniciarMuerte(callbackRenacer) {
     let ramasPorGen = {}; 
     let maxGenActual = 0;
 
-    // 1. Escáner Estructural (Agrupa por Generación)
     function clasificar(rama) {
         maxGenActual = Math.max(maxGenActual, rama.gen);
         if (!ramasPorGen[rama.gen]) ramasPorGen[rama.gen] = [];
@@ -175,7 +174,8 @@ function iniciarMuerte(callbackRenacer) {
                     if(m) {
                         hojasF.push({
                             dom: h.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
-                            vx: (Math.random() - 0.5) * 4, vy: Math.random() * -2 - 1, fallTime: 0,
+                            // FÍSICA CORREGIDA: No hay 'salto' hacia arriba (vy empieza en casi cero)
+                            vx: (Math.random() - 0.5) * 1.5, vy: Math.random() * 0.5, fallTime: 0,
                             startOpacity: parseFloat(h.dom.getAttribute('opacity') || 1)
                         });
                     }
@@ -191,7 +191,7 @@ function iniciarMuerte(callbackRenacer) {
                 if(m) {
                     hojasF.push({
                         dom: f.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
-                        vx: (Math.random() - 0.5) * 3, vy: Math.random() * -3 - 1, fallTime: 0,
+                        vx: (Math.random() - 0.5) * 1.5, vy: Math.random() * 0.5, fallTime: 0,
                         startOpacity: parseFloat(f.dom.getAttribute('opacity') || 1)
                     });
                 }
@@ -200,7 +200,7 @@ function iniciarMuerte(callbackRenacer) {
 
         let obj = {
             dom: rama.g, path: rama.path, joints: [rama.jointBase, rama.jointTip],
-            x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -1 - 1,
+            x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -0.5,
             cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
             colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false
         };
@@ -219,74 +219,73 @@ function iniciarMuerte(callbackRenacer) {
         }
     }
 
-    // 2. Coreografía: Oleadas de Hojas (Desaparecen antes de seguir)
+    // 1. Tiempos Acelerados para las Hojas
     shuffle(hojasF);
     hojasF.forEach((h, i) => {
         let pct = i / hojasF.length;
-        if (pct < 0.33) h.fallTime = Math.random() * 300;           // 0s a 1.5s (desaparecen)
-        else if (pct < 0.66) h.fallTime = 1500 + Math.random() * 300; // 1.5s a 3.0s
-        else h.fallTime = 3000 + Math.random() * 300;               // 3.0s a 4.5s
+        if (pct < 0.33) h.fallTime = Math.random() * 300;           // Oleada 1 (inmediata)
+        else if (pct < 0.66) h.fallTime = 800 + Math.random() * 300;  // Oleada 2 
+        else h.fallTime = 1600 + Math.random() * 300;                 // Oleada 3
     });
 
-    // 3. Coreografía: Ramas de AFUERA hacia ADENTRO
     let ramasFlat = [];
-    let tronco = ramasPorGen[0] || [];
-    let fallTimeCursor = 4500; // Las ramas empiezan a caer al terminar las hojas
+    let tronco = [];
+    let fallTimeCursor = 2500; // Las ramas empiezan a caer al terminar las hojas
     
-    // Iterar desde la generación más alta (puntas) hasta la 1 (ramas gruesas)
-    for (let g = maxGenActual; g > 0; g--) {
+    // 2. CONSERVACIÓN ESTRUCTURAL: La Generación 0, 1 y 2 no caen, se vuelven tronco.
+    for (let g = 0; g <= maxGenActual; g++) {
         if (ramasPorGen[g]) {
-            ramasPorGen[g].forEach(r => {
-                r.fallTime = fallTimeCursor + Math.random() * 200;
-                ramasFlat.push(r);
-            });
-            // Cada capa de ramas espera 1 segundo antes de caer la siguiente capa.
-            // Esto garantiza matemáticamente que NINGÚN HIJO FLOTE, porque el hijo 
-            // ya cayó y desapareció antes de que su padre se suelte.
-            fallTimeCursor += 1000; 
+            if (g <= 2) {
+                tronco.push(...ramasPorGen[g]); 
+            } else {
+                ramasPorGen[g].forEach(r => {
+                    r.fallTime = fallTimeCursor + Math.random() * 150;
+                    ramasFlat.push(r);
+                });
+                fallTimeCursor += 500; // Caen muy rápido capa tras capa
+                
+                if (audioMotor.sfxEnabled) {
+                    let audioTime = fallTimeCursor;
+                    setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), audioTime);
+                }
+            }
         }
     }
     
-    let trunkTime = fallTimeCursor + 500; // El tronco muere al final
-
-    if (audioMotor.sfxEnabled) {
-        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 4500);
-        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 5500);
-        if(maxGenActual > 2) setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 6500);
-    }
+    let trunkTime = fallTimeCursor + 400; // El tronco muere casi inmediatamente después
 
     let startTime = performance.now();
     let groundY = 25; 
 
-    // 4. Bucle Físico y Culling por Tiempo
     function loopMuerte(now) {
         let elapsed = now - startTime;
         let completado = true;
 
-        // FASE 1: HOJAS (Culling temporal rápido)
+        // FASE 1: HOJAS SUAVES
         hojasF.forEach(p => {
             if (elapsed > p.fallTime && p.dom.style.display !== 'none') {
                 completado = false;
                 let age = elapsed - p.fallTime; 
                 
-                p.vy += 0.06;
-                p.vx += Math.sin(now * 0.005 + p.y) * 0.08;
-                p.vx *= 0.90; p.vy *= 0.95;
-                p.x += p.vx; p.y += p.vy; p.rot += p.vx * 4;
+                p.vy += 0.03; // Gravedad muy suave
+                p.vx += Math.sin(now * 0.003 + p.y) * 0.05; // Oscilación (vaivén natural)
+                p.vx *= 0.92; 
+                p.vy *= 0.95; // Límite de velocidad de caída
+                p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
 
-                // Desvanecimiento acelerado: A los 0.8s empieza a borrarse, a los 1.5s ya no existe.
+                // Desvanecimiento acelerado
                 let op = p.startOpacity;
-                if (age > 800) {
-                    op = Math.max(0, p.startOpacity * (1 - (age - 800) / 700));
+                if (age > 700) {
+                    op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
                 }
                 
                 p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
                 p.dom.setAttribute('opacity', op);
-                if (op <= 0) p.dom.style.display = 'none'; // Libera SVG de la vista
+                if (op <= 0) p.dom.style.display = 'none'; 
             }
         });
 
-        // FASE 2: RAMAS CAYENDO
+        // FASE 2: RAMAS FINAS CAYENDO
         ramasFlat.forEach(r => {
             if (elapsed > r.fallTime && r.dom.style.display !== 'none') {
                 completado = false;
@@ -304,10 +303,9 @@ function iniciarMuerte(callbackRenacer) {
                     }
                 }
 
-                // Culling por tiempo: Maximo 1.5 segundos viva después de caer, toque o no el suelo.
                 let op = 1;
-                if (age > 1000) {
-                    op = Math.max(0, 1 - (age - 1000) / 500);
+                if (age > 800) { // Se borran muy rápido para limpiar la vista
+                    op = Math.max(0, 1 - (age - 800) / 400);
                 }
 
                 r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
@@ -316,31 +314,31 @@ function iniciarMuerte(callbackRenacer) {
             }
         });
 
-        // FASE 3: NECROSIS DEL TRONCO
+        // FASE 3: NECROSIS DEL TRONCO (Generaciones 0, 1, 2)
         if (elapsed > trunkTime) {
-            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1500); 
+            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); // 1 segundo en ennegrecer
             tronco.forEach(r => {
                 if (r.dom.style.display !== 'none') {
                     completado = false;
                     let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                     if (match) {
-                        let rFill = Math.max(10, match[1] * (1 - pProgreso));
-                        let gFill = Math.max(10, match[2] * (1 - pProgreso));
-                        let bFill = Math.max(10, match[3] * (1 - pProgreso));
+                        let rFill = Math.max(15, match[1] * (1 - pProgreso));
+                        let gFill = Math.max(15, match[2] * (1 - pProgreso));
+                        let bFill = Math.max(15, match[3] * (1 - pProgreso));
                         let newColor = `rgb(${rFill},${gFill},${bFill})`; 
                         r.path.setAttribute('fill', newColor);
                         r.joints.forEach(j => j.setAttribute('fill', newColor));
                     }
                     
-                    if (elapsed > trunkTime + 1500) {
-                        let opFinal = 1 - ((elapsed - (trunkTime + 1500)) / 1000);
+                    if (elapsed > trunkTime + 1000) {
+                        let opFinal = 1 - ((elapsed - (trunkTime + 1000)) / 800); // 0.8s en desaparecer
                         r.dom.setAttribute('opacity', Math.max(0, opFinal));
                         if (opFinal <= 0) r.dom.style.display = 'none';
                     }
                 }
             });
         } else {
-            if (tronco.length > 0) completado = false; // El tronco sigue vivo
+            if (tronco.length > 0) completado = false; 
         }
 
         if (!completado) {

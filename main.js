@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR MEJORADO: MUERTE Y ASTILLAMIENTO EN TIEMPO REAL ---
+// --- ORQUESTADOR: MUERTE Y ASTILLAMIENTO DETALLADO ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -202,7 +202,8 @@ function iniciarMuerte(callbackRenacer) {
             x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -0.5,
             cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
             colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false,
-            isBroken: false, // Candado para ejecutar la rotura visual solo al caer
+            isBroken: false, 
+            isSplintered: false, // Candado para astillar el tronco
             ramaRef: rama 
         };
 
@@ -289,7 +290,6 @@ function iniciarMuerte(callbackRenacer) {
                 completado = false;
                 let age = elapsed - r.fallTime;
 
-                // --- MAGIA VISUAL: ROMPER LA RAMA EN EL INSTANTE EXACTO DE CAÍDA ---
                 if (!r.isBroken) {
                     r.isBroken = true;
                     let ref = r.ramaRef;
@@ -300,7 +300,7 @@ function iniciarMuerte(callbackRenacer) {
                     if (len > 0) {
                         let nx = -dy / len;
                         let ny = dx / len;
-                        let rBase = (ref.grosorBaseAct / 2) * 0.6; // Adelgaza al romperse
+                        let rBase = (ref.grosorBaseAct / 2) * 0.6; 
                         
                         let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase;
                         let bx2 = ref.startX - nx * rBase; let by2 = ref.startY - ny * rBase;
@@ -340,12 +340,64 @@ function iniciarMuerte(callbackRenacer) {
             }
         });
 
-        // FASE 3: NECROSIS DEL TRONCO (Generaciones 0, 1, 2)
+        // FASE 3: NECROSIS DEL TRONCO Y ASTILLADO DE PUNTAS
         if (elapsed > trunkTime) {
             let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
             tronco.forEach(r => {
                 if (r.dom.style.display !== 'none') {
                     completado = false;
+                    
+                    // MAGIA VISUAL: Tallar el tronco sin perder su grosor
+                    if (!r.isSplintered) {
+                        r.isSplintered = true;
+                        let ref = r.ramaRef;
+                        let dx = ref.endXAct - ref.startX;
+                        let dy = ref.endYAct - ref.startY;
+                        let len = Math.hypot(dx, dy);
+                        
+                        if (len > 0) {
+                            let nxDir = dx / len; 
+                            let nyDir = dy / len;
+                            
+                            let currentD = r.path.getAttribute("d");
+                            // Regex para capturar las coordenadas exactas de la curva Bézier
+                            let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
+                            let m = currentD.match(regex);
+                            
+                            if (m) {
+                                let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]);
+                                let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]);
+                                let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]);
+                                let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]);
+                                let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]);
+                                let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
+                                
+                                let vtipX = px2 - px1;
+                                let vtipY = py2 - py1;
+                                
+                                let rFin = ref.grosorPuntaAct / 2;
+                                let spikeLen = rFin * 2.0; // Los picos se extienden en proporción al grosor de la rama
+                                
+                                // Creamos tres triángulos afilados en la punta plana
+                                let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                                let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                                
+                                let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
+                                let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                                
+                                let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                                let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                                
+                                // Reconstruimos el SVG fusionando las curvas gruesas con los picos filosos
+                                let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
+                                
+                                r.path.setAttribute("d", newD);
+                                r.joints[1].style.display = 'none'; // Apagamos la esfera de la punta
+                            }
+                        }
+                    }
+
+                    // Transición de color hacia el negro
                     let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                     if (match) {
                         let rFill = Math.max(15, match[1] * (1 - pProgreso));
@@ -353,7 +405,7 @@ function iniciarMuerte(callbackRenacer) {
                         let bFill = Math.max(15, match[3] * (1 - pProgreso));
                         let newColor = `rgb(${rFill},${gFill},${bFill})`; 
                         r.path.setAttribute('fill', newColor);
-                        r.joints.forEach(j => j.setAttribute('fill', newColor));
+                        r.joints[0].setAttribute('fill', newColor); // Solo oscurecemos la junta base, la punta ya no existe
                     }
                     
                     if (elapsed > trunkTime + 1000) {

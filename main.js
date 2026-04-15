@@ -23,7 +23,7 @@ let tiempoViento = 0;
 let isZenMode = false;
 let isAutoGrowing = false;
 let zenPausa = false;
-let isDying = false; // Control de la animación de muerte
+let isDying = false; 
 let deathFrameId = null;
 
 let wakeLock = null; 
@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR: EL OCASO DEL BONSÁI ---
+// --- ORQUESTADOR CINEMATOGRÁFICO: EL OCASO DEL BONSÁI ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -165,23 +165,22 @@ function iniciarMuerte(callbackRenacer) {
 
     let maxGen = getParams().maxGen;
 
-    // Escáner recursivo para extraer todos los componentes SVG
+    // 1. Escáner recursivo de coordenadas SVG
     function clasificar(rama) {
         rama.brotes.forEach(b => {
             b.hojas.forEach(h => {
                 let tr = h.dom.getAttribute('transform');
                 if(tr) {
-                    // Magia de Regex para robar las coordenadas absolutas actuales
                     let m = tr.match(/translate\(([^,]+),\s*([^)]+)\)\s*rotate\(([^)]+)\)\s*scale\(([^)]+)\)/);
                     if(m) {
                         hojasF.push({
                             dom: h.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
-                            vx: (Math.random() - 0.5) * 3, vy: Math.random() * -1 - 1 // Brinco inicial
+                            vx: (Math.random() - 0.5) * 3, vy: Math.random() * -1 - 1, fallTime: 0
                         });
                     }
                 }
             });
-            b.tallo.style.display = 'none'; // Desaparece los tallos
+            b.tallo.style.display = 'none'; 
         });
 
         rama.flora.forEach(f => {
@@ -191,22 +190,17 @@ function iniciarMuerte(callbackRenacer) {
                 if(m) {
                     hojasF.push({
                         dom: f.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
-                        vx: (Math.random() - 0.5) * 2, vy: Math.random() * -2 - 1
+                        vx: (Math.random() - 0.5) * 2, vy: Math.random() * -2 - 1, fallTime: 0
                     });
                 }
             }
         });
 
         let obj = {
-            dom: rama.g,
-            path: rama.path,
-            joints: [rama.jointBase, rama.jointTip],
-            x: 0, y: 0, rot: 0,
-            vx: (Math.random() - 0.5) * 2,
-            vy: Math.random() * -2 - 1,
-            cx: rama.startX + (rama.endXAct - rama.startX)/2,
-            cy: rama.startY + (rama.endYAct - rama.startY)/2,
-            colorOriginal: rama.currentFill
+            dom: rama.g, path: rama.path, joints: [rama.jointBase, rama.jointTip],
+            x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 1.5, vy: Math.random() * -1 - 1,
+            cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
+            colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false
         };
 
         if (rama.gen >= maxGen - 2) ramas1.push(obj);
@@ -218,102 +212,157 @@ function iniciarMuerte(callbackRenacer) {
 
     clasificar(arbolBase);
     arbolBase = null; 
-    
-    let startTime = performance.now();
-    let groundY = 25; // Coordenada Y aproximada de la maceta en SVG
-    
-    // Inyectar drama acústico
-    if (audioMotor.sfxEnabled) {
-        audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime);
-        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 800);
-        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 1600);
+
+    // 2. Función auxiliar para barajar arreglos (Algoritmo Fisher-Yates)
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
     }
 
+    // 3. Coreografía de Tiempos (Staggering)
+    shuffle(hojasF);
+    hojasF.forEach((h, index) => {
+        let pct = index / hojasF.length;
+        // 10% caen de inmediato, 20% a los 2s, 30% a los 4s, el resto a los 5s
+        if (pct < 0.10) h.fallTime = Math.random() * 500; 
+        else if (pct < 0.30) h.fallTime = 2000 + Math.random() * 500; 
+        else if (pct < 0.60) h.fallTime = 4000 + Math.random() * 500; 
+        else h.fallTime = 5000 + Math.random() * 1000; 
+    });
+
+    shuffle(ramas1);
+    ramas1.forEach((r, index) => {
+        let pct = index / ramas1.length;
+        // Empiezan a caer tras 7.5 segundos (cuando las hojas ya van desapareciendo)
+        if (pct < 0.3) r.fallTime = 7500 + Math.random() * 500;
+        else if (pct < 0.6) r.fallTime = 8500 + Math.random() * 500;
+        else r.fallTime = 9000 + Math.random() * 800;
+    });
+
+    shuffle(ramas2);
+    ramas2.forEach((r, index) => {
+        let pct = index / ramas2.length;
+        // Las ramas medianas caen entre el segundo 10 y 11.5
+        if (pct < 0.5) r.fallTime = 10000 + Math.random() * 500;
+        else r.fallTime = 11000 + Math.random() * 800;
+    });
+
+    // Orquestación del Sonido Acústico
+    if (audioMotor.sfxEnabled) {
+        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 7500);
+        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 8500);
+        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 10000);
+        setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), 11000);
+    }
+
+    let startTime = performance.now();
+    let groundY = 25; // Coordenada del suelo de la maceta
+
+    // 4. Bucle Físico de Muerte
     function loopMuerte(now) {
         let elapsed = now - startTime;
-        let completado = true;
+        let completado = true; // Se mantendrá true solo si TODOS los elementos desaparecieron
         
-        // FASE 1: Hojas y Flores cayendo (inmediato)
+        // Mantener viva la animación durante al menos 15 segundos
+        if (elapsed < 15500) completado = false; 
+
+        // FASE 1: HOJAS EN VAIVÉN
         hojasF.forEach(p => {
-            if (p.y < groundY + 15) {
-                p.vy += 0.08; // Vaivén de hoja seca
-                p.vx += Math.sin(now * 0.005 + p.y) * 0.05; 
-                p.vx *= 0.92; 
+            if (elapsed > p.fallTime) {
+                // Comienza a caer
+                p.vy += 0.05; // Gravedad suave
+                p.vx += Math.sin(now * 0.005 + p.y) * 0.06; // Viento oscilante (Vaivén)
+                p.vx *= 0.90; // Fricción
                 p.vy *= 0.95;
                 
                 p.x += p.vx; p.y += p.vy; p.rot += p.vx * 3;
 
-                let op = 1;
-                if (p.y > groundY - 20) op = Math.max(0, (groundY + 15 - p.y) / 35); // Fade antes de tocar
+                // Faded out visual: Desaparecen justo ANTES de tocar el suelo
+                let op = parseFloat(p.dom.getAttribute('opacity') || 1);
+                if (p.y > groundY - 60) { // Comienzan a volverse transparentes 60px antes del suelo
+                    op = Math.max(0, (groundY - p.y) / 60); 
+                }
                 
                 p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
                 p.dom.setAttribute('opacity', op);
-                if (op > 0) completado = false;
-            } else {
-                p.dom.style.display = 'none';
+                
+                if (op <= 0) p.dom.style.display = 'none';
             }
         });
 
-        // FASES 2 y 3: Caída y rebote de Ramas
-        function animarRamas(ramas, startDelay) {
-            if (elapsed > startDelay) {
-                ramas.forEach(r => {
-                    if (r.y < groundY || Math.abs(r.vy) > 0.2 || Math.abs(r.vx) > 0.2) {
-                        r.vy += 0.4; 
+        // FASES 2 y 3: RAMAS CAYENDO, REBOTANDO Y ACOSTÁNDOSE
+        function animarRamas(ramas) {
+            ramas.forEach(r => {
+                if (elapsed > r.fallTime) {
+                    if (!r.tocandoSuelo) {
+                        r.vy += 0.5; // Gravedad pesada (Madera)
                         r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5; 
 
-                        if (r.y + r.cy > groundY) { // Rebote físico contra el suelo
+                        // Choque con el suelo
+                        if (r.y + r.cy > groundY) { 
                             r.y = groundY - r.cy;
-                            r.vy *= -0.4; r.vx *= 0.6;
-                            let targetRot = (r.rot > 0) ? 90 : -90; // Tiende a acostarse horizontal
-                            r.rot += (targetRot - r.rot) * 0.08;
+                            r.vy *= -0.4; // Rebote
+                            r.vx *= 0.6;  // Fricción en el suelo
+                            
+                            // Gira tendiendo a la horizontalidad (90 o -90 grados)
+                            let targetRot = (r.rot > 0) ? 90 : -90; 
+                            r.rot += (targetRot - r.rot) * 0.15;
+                            
+                            // Si ya casi no tiene energía, marcamos que yace en el suelo
+                            if (Math.abs(r.vy) < 1.0) r.tocandoSuelo = true;
                         }
-
-                        let op = parseFloat(r.dom.getAttribute('opacity') || 1);
-                        if (r.y + r.cy > groundY - 2 && Math.abs(r.vy) < 1.5) {
-                            op = Math.max(0, op - 0.04);
-                            r.dom.setAttribute('opacity', op);
-                        }
-
-                        r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
-                        if (op > 0) completado = false;
-                        else r.dom.style.display = 'none';
                     }
-                });
-            } else completado = false;
+
+                    let op = parseFloat(r.dom.getAttribute('opacity') || 1);
+                    
+                    // Cuando ya yace en el suelo, se desvanece
+                    if (r.tocandoSuelo) {
+                        op -= 0.02; // Fade out rápido
+                    }
+
+                    r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
+                    r.dom.setAttribute('opacity', Math.max(0, op));
+                    
+                    if (op <= 0) r.dom.style.display = 'none';
+                }
+            });
         }
 
-        animarRamas(ramas1, 600);
-        animarRamas(ramas2, 1400);
+        animarRamas(ramas1);
+        animarRamas(ramas2);
 
-        // FASE 4: Necrosis del Tronco y Fade Out Rápido
-        if (elapsed > 2000) {
-            let pProgreso = Math.min(1, (elapsed - 2000) / 1500); 
+        // FASE 4: NECROSIS DEL TRONCO Y FADE OUT
+        if (elapsed > 12500) {
+            let pProgreso = Math.min(1, (elapsed - 12500) / 2500); // Tarda 2.5s en ennegrecerse
+            
             tronco.forEach(r => {
                 let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                 if (match) {
+                    // Transición suave hacia casi negro (RGB 10,10,10)
                     let rFill = Math.max(10, match[1] * (1 - pProgreso));
                     let gFill = Math.max(10, match[2] * (1 - pProgreso));
                     let bFill = Math.max(10, match[3] * (1 - pProgreso));
-                    let newColor = `rgb(${rFill},${gFill},${bFill})`; // Se acerca a negro #0A0A0A
+                    let newColor = `rgb(${rFill},${gFill},${bFill})`; 
                     r.path.setAttribute('fill', newColor);
                     r.joints.forEach(j => j.setAttribute('fill', newColor));
                 }
                 
-                if (pProgreso > 0.6) { // Fade out agresivo al final
-                    let op = 1 - ((pProgreso - 0.6) * 2.5);
-                    r.dom.setAttribute('opacity', Math.max(0, op));
-                    if (op <= 0) r.dom.style.display = 'none';
+                // Desvanecimiento final al último segundo
+                if (elapsed > 14500) { 
+                    let opFinal = 1 - ((elapsed - 14500) / 1000);
+                    r.dom.setAttribute('opacity', Math.max(0, opFinal));
+                    if (opFinal <= 0) r.dom.style.display = 'none';
                 }
-                if (pProgreso < 1) completado = false;
             });
-        } else completado = false;
+        }
 
         if (!completado) {
             deathFrameId = requestAnimationFrame(loopMuerte);
         } else {
             isDying = false;
-            if (callbackRenacer) callbackRenacer(); // Llama a plantar de nuevo
+            if (callbackRenacer) callbackRenacer(); 
         }
     }
     
@@ -375,8 +424,6 @@ window.addEventListener('click', () => {
 document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
 document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
 
-
-// --- MODIFICADO: CONEXIÓN DE BOTONES CON LA ANIMACIÓN Y SEMILLAS ---
 document.getElementById('btn-reset').addEventListener('click', () => {
     if(isDying) return;
     iniciarMuerte(inicializarArbol);
@@ -410,7 +457,6 @@ document.getElementById('btn-fondo').addEventListener('click', (e) => { const ac
 document.getElementById('btn-mutar').addEventListener('click', () => {
     if (isDying) return;
     
-    // Inicia la muerte, y al terminar, cambia los settings y renace
     iniciarMuerte(() => {
         const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
         const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
@@ -433,7 +479,6 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
         actualizarUI('p-hojas', Math.floor(rnd(5, 25)));
         actualizarUI('p-flor', Math.floor(rnd(3, 8)));
         
-        // Generar nueva semilla en la UI y disparar
         let inputSemilla = document.getElementById('input-semilla');
         if(inputSemilla) inputSemilla.value = Math.random().toString(36).substring(2, 8).toUpperCase();
         
@@ -519,7 +564,6 @@ function bucleAnimacion() {
         if (iteracionGlobal > 18) {
             zenPausa = true;
             if(isZenMode) {
-                // MODIFICADO: El Zen automático ahora lanza la animación en lugar de reescribir de golpe
                 setTimeout(() => { if(isZenMode) document.getElementById('btn-mutar').click(); }, 2000); 
             } else {
                 isAutoGrowing = false;
@@ -546,7 +590,6 @@ function inicializarArbol() {
         animationFrameId = null;
     }
     
-    // --- LECTURA DE LA SEMILLA PARA PRNG ---
     let inputSemilla = document.getElementById('input-semilla');
     if (inputSemilla) {
         let textoSemilla = inputSemilla.value.trim().toUpperCase();
@@ -556,7 +599,6 @@ function inicializarArbol() {
         }
         setSeed(textoSemilla);
         
-        // Actualiza URL silenciosamente
         const url = new URL(window.location);
         url.searchParams.set('seed', textoSemilla);
         window.history.replaceState({}, '', url);
@@ -573,7 +615,6 @@ function inicializarArbol() {
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     
-    // Lector de Semilla compartida en la URL
     const urlParams = new URLSearchParams(window.location.search);
     const semillaURL = urlParams.get('seed');
     let inputSemilla = document.getElementById('input-semilla');
@@ -581,7 +622,6 @@ window.addEventListener('DOMContentLoaded', () => {
         inputSemilla.value = semillaURL.toUpperCase();
     }
 
-    // Configuración del botón copiar enlace
     let btnCopiar = document.getElementById('btn-copiar-semilla');
     if (btnCopiar) {
         btnCopiar.addEventListener('click', () => {

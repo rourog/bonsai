@@ -163,12 +163,9 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
-// --- SOLUCIÓN: ARRANQUE SEGURO DEL AUDIO ---
 function arrancarAudioSilencioso() {
     if(!audioIniciado) {
         audioIniciado = true;
-        // En lugar de llamar funciones del motor directamente y arriesgar un crash,
-        // forzamos el clic en los botones para que la Interfaz haga el trabajo sucio.
         let btnSfx = document.getElementById('btn-sfx');
         let btnMus = document.getElementById('btn-music');
         
@@ -387,6 +384,12 @@ window.addEventListener('DOMContentLoaded', () => {
     isAutoGrowing = true;
     btnAuto.classList.add('active-toggle');
     btnAuto.innerHTML = "Auto-Crecer: ON";
+
+    // NUEVO: Enciende el fondo de cielo por defecto al cargar
+    let btnFondo = document.getElementById('btn-fondo');
+    if (btnFondo && !btnFondo.classList.contains('active-toggle')) {
+        btnFondo.click();
+    }
     
     solicitarWakeLock();
     resetTimerIdle();

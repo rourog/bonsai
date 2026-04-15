@@ -4,7 +4,8 @@ import { MotorAudio } from './MotorAudio.js';
 import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js';
 import { Rama, rnd, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
 
-// --- INICIALIZACIÓN DE CONTEXTO ---
+// --- 1. INICIALIZACIÓN DE CONTEXTO Y MOTORES ---
+
 const domContext = {
     layerPot: document.getElementById('layer-pot'),
     layerTree: document.getElementById('layer-tree'),
@@ -16,32 +17,38 @@ const audioMotor = new MotorAudio();
 const entornoMotor = new MotorEntorno(domContext);
 domContext.audioMotor = audioMotor;
 
+// --- 2. ESTADO GLOBAL DEL SIMULADOR ---
+
 let arbolBase = null;
 let animationFrameId = null;
 let iteracionGlobal = 0;
 let tiempoViento = 0;
 
-// Variables de Estado Independientes
 let isZenMode = false;
-let isAutoGrowing = false; // Controla si el árbol crece automáticamente (fuera del Zen)
+let isAutoGrowing = false;
 let zenPausa = false;
 
+let wakeLock = null; // Control para mantener la pantalla encendida
 let idleTimeout = null;
 let showLeaves = true;
 let showFlowers = true;
 let audioIniciado = false;
 
+// Referencias a UI
 const statsDisplay = document.getElementById('stats');
 const btnZenMain = document.getElementById('btn-zen-main');
 const dashboard = document.getElementById('dashboard');
+const btnAuto = document.getElementById('btn-auto');
 
-// --- GENERADOR DE INTERFAZ CÍCLICA ---
+// --- 3. CONSTRUCTOR DE INTERFAZ DINÁMICA ---
+
 const ESTADO_CICLICO = {}; 
 
 function construirInterfaz() {
     const contenedorMorfologia = document.getElementById('ui-morfologia');
     const contenedorParametros = document.getElementById('ui-parametros');
 
+    // Construcción de Botones Cíclicos
     let htmlCiclicos = `<div class="grid-2">`;
     htmlCiclicos += crearBotonCiclico('p-maceta-forma', 'Maceta', DICCIONARIO_ENTORNO.macetas);
     htmlCiclicos += crearBotonCiclico('p-maceta-color', 'Color', DICCIONARIO_ENTORNO.esmaltes);
@@ -51,33 +58,39 @@ function construirInterfaz() {
     
     contenedorMorfologia.innerHTML = htmlCiclicos;
 
+    // Construcción de Sliders
+    let htmlParams = '';
     PARAMETROS_MOTOR.forEach(param => {
         const isDecimal = param.step % 1 !== 0;
         const valTxt = isDecimal ? param.default.toFixed(1) : param.default;
         const colorStyle = param.color ? `style="color: ${param.color};"` : '';
-        
-        contenedorParametros.innerHTML += `
+        htmlParams += `
             <div class="control-group">
                 <label><span ${colorStyle}>${param.label}</span> <span id="val-${param.id}" ${colorStyle}>${valTxt}</span></label>
                 <input type="range" id="${param.id}" data-key="${param.key}" min="${param.min}" max="${param.max}" step="${param.step}" value="${param.default}">
             </div>
         `;
     });
+    contenedorParametros.innerHTML = htmlParams;
 
+    // Listeners para Botones Cíclicos
     ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
-        document.getElementById(id).addEventListener('click', (e) => {
-            let state = ESTADO_CICLICO[id];
-            state.index = (state.index + 1) % state.opciones.length; 
-            let opt = state.opciones[state.index];
-            
-            // Actualiza valor e UI
-            e.currentTarget.setAttribute('data-value', opt.id);
-            e.currentTarget.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
-            
-            if(id.startsWith('p-maceta')) updatePot();
-        });
+        const btn = document.getElementById(id);
+        if(btn) {
+            btn.addEventListener('click', (e) => {
+                let state = ESTADO_CICLICO[id];
+                state.index = (state.index + 1) % state.opciones.length; 
+                let opt = state.opciones[state.index];
+                
+                e.currentTarget.setAttribute('data-value', opt.id);
+                e.currentTarget.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
+                
+                if(id.startsWith('p-maceta')) updatePot();
+            });
+        }
     });
 
+    // Listeners para Sliders
     document.querySelectorAll('#ui-parametros input[type="range"]').forEach(input => {
         input.addEventListener('input', (e) => {
             const isDecimal = e.target.step % 1 !== 0;
@@ -93,18 +106,23 @@ function crearBotonCiclico(id, prefix, opciones) {
     return `<button id="${id}" class="action-btn cyclic-btn" data-value="${opciones[0].id}">${prefix}: <span>${opciones[0].nombre}</span></button>`;
 }
 
+// --- 4. EXTRACCIÓN Y ACTUALIZACIÓN DE DATOS ---
+
 export function getParams() {
     const params = {
-        formaHoja: document.getElementById('p-forma').getAttribute('data-value'),
-        tipoFlora: document.getElementById('p-flora').getAttribute('data-value'),
+        formaHoja: document.getElementById('p-forma') ? document.getElementById('p-forma').getAttribute('data-value') : 'ovalada',
+        tipoFlora: document.getElementById('p-flora') ? document.getElementById('p-flora').getAttribute('data-value') : 'ninguno',
     };
     
     PARAMETROS_MOTOR.forEach(p => {
-        let rawVal = document.getElementById(p.id).value;
-        if (p.id === 'p-branch' || p.id === 'p-acc' || p.id === 'p-viento' || p.id === 'p-lenVar') {
-            params[p.key] = parseFloat(rawVal) / 100;
-        } else {
-            params[p.key] = parseFloat(rawVal);
+        let el = document.getElementById(p.id);
+        if(el) {
+            let rawVal = el.value;
+            if (p.id === 'p-branch' || p.id === 'p-acc' || p.id === 'p-viento' || p.id === 'p-lenVar') {
+                params[p.key] = parseFloat(rawVal) / 100;
+            } else {
+                params[p.key] = parseFloat(rawVal);
+            }
         }
     });
     return params;
@@ -129,12 +147,165 @@ function actualizarUI(id, valor) {
 }
 
 const updatePot = () => {
-    const forma = document.getElementById('p-maceta-forma').getAttribute('data-value');
-    const color = document.getElementById('p-maceta-color').getAttribute('data-value');
-    entornoMotor.renderizarMaceta(forma, color);
+    let elForma = document.getElementById('p-maceta-forma');
+    let elColor = document.getElementById('p-maceta-color');
+    if(elForma && elColor) {
+        entornoMotor.renderizarMaceta(elForma.getAttribute('data-value'), elColor.getAttribute('data-value'));
+    }
 };
 
-// --- PRESETS ---
+// --- 5. CONTROL DE PANTALLA ACTIVA (WAKE LOCK API) ---
+
+async function solicitarWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => {
+                wakeLock = null;
+            });
+        }
+    } catch (err) {
+        console.warn(`Wake Lock no disponible: ${err.message}`);
+    }
+}
+
+function liberarWakeLock() {
+    if (wakeLock !== null) {
+        wakeLock.release();
+        wakeLock = null;
+    }
+}
+
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock === null && document.visibilityState === 'visible' && isZenMode) {
+        solicitarWakeLock();
+    }
+});
+
+// --- 6. LÓGICA DE EVENTOS (AUDIO, UI, ZEN) ---
+
+function arrancarAudioSilencioso() {
+    if(!audioIniciado) {
+        audioMotor.sfxEnabled = true;
+        audioMotor.musicEnabled = true;
+        
+        let btnSfx = document.getElementById('btn-sfx');
+        let btnMus = document.getElementById('btn-music');
+        if(btnSfx) { btnSfx.classList.add('active-toggle'); btnSfx.innerHTML = "🍃 SFX: ON"; }
+        if(btnMus) { btnMus.classList.add('active-toggle'); btnMus.innerHTML = "🎵 MÚSICA: ON"; }
+        
+        audioMotor.initCtx();
+        audioMotor.initWind();
+        if(isZenMode) audioMotor.resumeMusic();
+        
+        audioIniciado = true;
+    }
+}
+
+function resetTimerIdle() {
+    document.body.classList.remove('zen-idle');
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(() => { 
+        if (isZenMode) document.body.classList.add('zen-idle'); 
+    }, 5000);
+}
+
+// Interacción general para despertar UI y Audio
+window.addEventListener('mousemove', resetTimerIdle);
+window.addEventListener('touchstart', () => {
+    arrancarAudioSilencioso();
+    resetTimerIdle();
+}, { passive: true });
+window.addEventListener('click', () => {
+    arrancarAudioSilencioso();
+    resetTimerIdle();
+});
+
+// Controles de Menú
+document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
+document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
+
+// Botones de Crecimiento
+document.getElementById('btn-reset').addEventListener('click', inicializarArbol);
+
+document.getElementById('btn-step').addEventListener('click', () => {
+    if(arbolBase && iteracionGlobal <= 18) {
+        arbolBase.crecer(1.0, getParams());
+        iteracionGlobal += 1.0;
+        statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
+    }
+});
+
+btnAuto.addEventListener('click', (e) => {
+    isAutoGrowing = !isAutoGrowing;
+    if(isAutoGrowing) {
+        e.target.classList.add('active-toggle');
+        e.target.innerHTML = "Auto-Crecer: ON";
+    } else {
+        e.target.classList.remove('active-toggle');
+        e.target.innerHTML = "Auto-Crecer: OFF";
+    }
+});
+
+// Alternadores de Capas
+document.getElementById('btn-hojas').addEventListener('click', (e) => { 
+    showLeaves = !showLeaves; 
+    e.target.classList.toggle('active-toggle', showLeaves); 
+});
+document.getElementById('btn-flores').addEventListener('click', (e) => { 
+    showFlowers = !showFlowers; 
+    e.target.classList.toggle('active-toggle', showFlowers); 
+});
+
+// Botones de Entorno y Sonido
+document.getElementById('btn-sfx').addEventListener('click', (e) => {
+    const activado = audioMotor.toggleSfx();
+    e.target.classList.toggle('active-toggle', activado);
+    e.target.innerHTML = activado ? "🍃 SFX: ON" : "🍃 SFX: OFF";
+});
+
+document.getElementById('btn-music').addEventListener('click', (e) => {
+    const activado = audioMotor.toggleMusic();
+    e.target.classList.toggle('active-toggle', activado);
+    e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF";
+    if (activado && isZenMode) audioMotor.resumeMusic();
+});
+
+document.getElementById('btn-fondo').addEventListener('click', (e) => {
+    const activado = entornoMotor.toggleSky();
+    e.target.classList.toggle('active-toggle', activado);
+    e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF";
+});
+
+// Botón Maestro Zen
+btnZenMain.addEventListener('click', (e) => {
+    e.stopPropagation(); 
+    isZenMode = !isZenMode;
+    if (isZenMode) {
+        document.body.classList.add('zen-active');
+        btnZenMain.classList.add('active');
+        zenPausa = false;
+        
+        isAutoGrowing = true;
+        btnAuto.classList.add('active-toggle');
+        btnAuto.innerHTML = "Auto-Crecer: ON";
+        
+        if (iteracionGlobal > 18) { document.getElementById('btn-mutar').click(); } 
+        if (audioIniciado) audioMotor.resumeMusic();
+        
+        solicitarWakeLock();
+        resetTimerIdle(); 
+    } else {
+        document.body.classList.remove('zen-active');
+        document.body.classList.remove('zen-idle');
+        btnZenMain.classList.remove('active');
+        audioMotor.stopMusic();
+        liberarWakeLock();
+    }
+});
+
+// --- 7. PRESETS BOTÁNICOS ---
+
 const PRESETS_BOTANICOS = {
     pino:     { mForma: 'estandar', mColor: '#c05a41', viento: 10, length: 25, lenVar: 10, angle: 20, branch: 45, acc: 10, gen: 5, hojas: 5, flor: 8, forma: 'huso', flora: 'ninguno', edadRam: 3.5 }, 
     roble:    { mForma: 'plana',    mColor: '#2c3e50', viento: 25, length: 18, lenVar: 30, angle: 50, branch: 75, acc: 35, gen: 6, hojas: 18, flor: 7, forma: 'ovalada', flora: 'ninguno', edadRam: 2.8 },
@@ -191,136 +362,7 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
     inicializarArbol();
 });
 
-// --- AUDIO AUTOMÁTICO (ENCENDIDO AL PRIMER CLIC) ---
-
-function arrancarAudioSilencioso() {
-    if(!audioIniciado) {
-        audioMotor.sfxEnabled = true;
-        audioMotor.musicEnabled = true;
-        
-        document.getElementById('btn-sfx').classList.add('active-toggle');
-        document.getElementById('btn-sfx').innerHTML = "🍃 SFX: ON";
-        document.getElementById('btn-music').classList.add('active-toggle');
-        document.getElementById('btn-music').innerHTML = "🎵 MÚSICA: ON";
-        
-        audioMotor.initCtx();
-        audioMotor.initWind();
-        if(isZenMode) audioMotor.resumeMusic();
-        
-        audioIniciado = true;
-    }
-}
-
-
-// --- GESTIÓN DE INTERACTIVIDAD (5 SEGUNDOS WAKE-UP) ---
-
-function resetTimerIdle() {
-    // Muestra los botones inmediatamente quitando 'zen-idle'
-    document.body.classList.remove('zen-idle');
-    clearTimeout(idleTimeout);
-    // Vuelve a ocultarlos tras 5 segundos (5000ms) si está en modo zen
-    idleTimeout = setTimeout(() => { 
-        if (isZenMode) document.body.classList.add('zen-idle'); 
-    }, 5000);
-}
-
-// Detectar movimiento en desktop y toques en móvil para despertar la UI
-window.addEventListener('mousemove', resetTimerIdle);
-window.addEventListener('touchstart', (e) => {
-    arrancarAudioSilencioso();
-    resetTimerIdle();
-});
-window.addEventListener('click', (e) => {
-    arrancarAudioSilencioso();
-    resetTimerIdle();
-});
-
-
-document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
-document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
-document.getElementById('btn-reset').addEventListener('click', inicializarArbol);
-
-
-// --- CONTROLES DE CRECIMIENTO INDEPENDIENTES ---
-
-const btnAuto = document.getElementById('btn-auto');
-
-document.getElementById('btn-step').addEventListener('click', () => {
-    if(arbolBase && iteracionGlobal <= 18) {
-        arbolBase.crecer(1.0, getParams());
-        iteracionGlobal += 1.0;
-        statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
-    }
-});
-
-btnAuto.addEventListener('click', (e) => {
-    isAutoGrowing = !isAutoGrowing;
-    if(isAutoGrowing) {
-        e.target.classList.add('active-toggle');
-        e.target.innerHTML = "Auto-Crecer: ON";
-    } else {
-        e.target.classList.remove('active-toggle');
-        e.target.innerHTML = "Auto-Crecer: OFF";
-    }
-});
-
-
-document.getElementById('btn-hojas').addEventListener('click', (e) => { 
-    showLeaves = !showLeaves; 
-    e.target.classList.toggle('active-toggle', showLeaves); 
-});
-document.getElementById('btn-flores').addEventListener('click', (e) => { 
-    showFlowers = !showFlowers; 
-    e.target.classList.toggle('active-toggle', showFlowers); 
-});
-
-document.getElementById('btn-sfx').addEventListener('click', (e) => {
-    const activado = audioMotor.toggleSfx();
-    e.target.classList.toggle('active-toggle', activado);
-    e.target.innerHTML = activado ? "🍃 SFX: ON" : "🍃 SFX: OFF";
-});
-document.getElementById('btn-music').addEventListener('click', (e) => {
-    const activado = audioMotor.toggleMusic();
-    e.target.classList.toggle('active-toggle', activado);
-    e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF";
-    if (activado && isZenMode) audioMotor.resumeMusic();
-});
-document.getElementById('btn-fondo').addEventListener('click', (e) => {
-    const activado = entornoMotor.toggleSky();
-    e.target.classList.toggle('active-toggle', activado);
-    e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF";
-});
-
-// --- MODO ZEN ---
-btnZenMain.addEventListener('click', (e) => {
-    e.stopPropagation(); // Evita que el click se propague y reinicie los timers raramente
-    isZenMode = !isZenMode;
-    if (isZenMode) {
-        document.body.classList.add('zen-active');
-        btnZenMain.classList.add('active');
-        zenPausa = false;
-        
-        // En modo Zen, el crecimiento automático es implícito
-        isAutoGrowing = true;
-        btnAuto.classList.add('active-toggle');
-        btnAuto.innerHTML = "Auto-Crecer: ON";
-        
-        if (iteracionGlobal > 18) { 
-            document.getElementById('btn-mutar').click(); 
-        } 
-        audioMotor.resumeMusic();
-        resetTimerIdle(); // Inicia la cuenta regresiva para ocultarse
-        
-    } else {
-        document.body.classList.remove('zen-active');
-        document.body.classList.remove('zen-idle'); // Fuerza a mostrar la UI
-        btnZenMain.classList.remove('active');
-        audioMotor.stopMusic();
-    }
-});
-
-
-// --- CICLO DE ANIMACIÓN PRINCIPAL ---
+// --- 8. BUCLE PRINCIPAL DE ANIMACIÓN ---
 
 function bucleAnimacion() {
     tiempoViento += 0.016; 
@@ -328,21 +370,17 @@ function bucleAnimacion() {
     
     audioMotor.actualizarViento(tiempoViento, paramsActuales.viento * 100);
 
-    // Crecimiento continuo si estamos en Zen o si el Auto-Crecer está activo
     if ((isZenMode || isAutoGrowing) && !zenPausa && arbolBase) {
         let deltaZen = 0.015; 
         arbolBase.crecer(deltaZen, paramsActuales);
         iteracionGlobal += deltaZen;
         statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
 
-        // Límite de edad alcanzado
         if (iteracionGlobal > 18) {
             zenPausa = true;
             if(isZenMode) {
-                // En Zen muta infinitamente
                 setTimeout(() => { if(isZenMode) { document.getElementById('btn-mutar').click(); } }, 4000); 
             } else {
-                // Fuera del Zen, simplemente se detiene
                 isAutoGrowing = false;
                 btnAuto.classList.remove('active-toggle');
                 btnAuto.innerHTML = "Auto-Crecer: OFF";
@@ -373,15 +411,13 @@ function inicializarArbol() {
     statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
     
     bucleAnimacion();
-    resetTimerIdle();
 }
 
-// --- ARRANQUE ---
+// --- 9. ARRANQUE DEL SISTEMA ---
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     window.aplicarPreset('pino'); 
     
-    // Iniciamos la simulación en Zen por defecto
     isZenMode = true;
     document.body.classList.add('zen-active');
     btnZenMain.classList.add('active');
@@ -390,5 +426,6 @@ window.addEventListener('DOMContentLoaded', () => {
     btnAuto.classList.add('active-toggle');
     btnAuto.innerHTML = "Auto-Crecer: ON";
     
+    solicitarWakeLock();
     resetTimerIdle();
 });

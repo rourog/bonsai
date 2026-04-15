@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR MEJORADO: ASTILLADO TEMPRANO DEL TRONCO ---
+// --- ORQUESTADOR MAESTRO: ASTILLADO GLOBAL ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -203,7 +203,7 @@ function iniciarMuerte(callbackRenacer) {
             cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
             colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false,
             isBroken: false, 
-            isSplintered: false, 
+            isEarlySplintered: false, 
             ramaRef: rama 
         };
 
@@ -232,7 +232,6 @@ function iniciarMuerte(callbackRenacer) {
     let ramasFlat = [];
     let tronco = [];
     let fallTimeCursor = 2500; 
-    let primerQuiebreTime = 0; // Guardaremos el momento en que se rompe la primera rama
     
     for (let g = maxGenActual; g >= 0; g--) {
         if (ramasPorGen[g]) {
@@ -241,26 +240,21 @@ function iniciarMuerte(callbackRenacer) {
             } else {
                 ramasPorGen[g].forEach(r => {
                     r.fallTime = fallTimeCursor + Math.random() * 150;
+                    r.breakTime = r.fallTime - 400; 
                     ramasFlat.push(r);
                 });
                 
-                // Si es la primera capa de ramas en caer, registramos el tiempo
-                if (primerQuiebreTime === 0) primerQuiebreTime = fallTimeCursor;
-
-                fallTimeCursor += 500; 
-                
                 if (audioMotor.sfxEnabled) {
-                    let audioTime = fallTimeCursor;
-                    setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), audioTime);
+                    let audioTime = fallTimeCursor - 400; 
+                    setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), Math.max(0, audioTime));
                 }
+                fallTimeCursor += 500; 
             }
         }
     }
     
-    // Si no había ramas extra para romper, que el tronco se astille tras las hojas
-    if (primerQuiebreTime === 0) primerQuiebreTime = 2500; 
-    
     let trunkTime = fallTimeCursor + 400;
+    let todasLasRamas = [...ramasFlat, ...tronco]; // Referencia combinada para astillar
 
     let startTime = performance.now();
     let groundY = 25; 
@@ -269,36 +263,87 @@ function iniciarMuerte(callbackRenacer) {
         let elapsed = now - startTime;
         let completado = true;
 
-        // FASE 1: HOJAS SUAVES
-        hojasF.forEach(p => {
-            if (elapsed > p.fallTime && p.dom.style.display !== 'none') {
-                completado = false;
-                let age = elapsed - p.fallTime; 
+        // FASE 0: ASTILLADO GLOBAL TEMPRANO (A los 50ms)
+        todasLasRamas.forEach(r => {
+            if (elapsed > 50 && !r.isEarlySplintered && r.ramaRef.gen < maxGenActual) {
+                r.isEarlySplintered = true;
+                let ref = r.ramaRef;
+                let dx = ref.endXAct - ref.startX;
+                let dy = ref.endYAct - ref.startY;
+                let len = Math.hypot(dx, dy);
                 
-                p.vy += 0.03; 
-                p.vx += Math.sin(now * 0.003 + p.y) * 0.05; 
-                p.vx *= 0.92; 
-                p.vy *= 0.95; 
-                p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
-
-                let op = p.startOpacity;
-                if (age > 700) {
-                    op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
+                if (len > 0) {
+                    let nxDir = dx / len; 
+                    let nyDir = dy / len;
+                    
+                    let currentD = r.path.getAttribute("d");
+                    let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
+                    let m = currentD.match(regex);
+                    
+                    if (m) {
+                        let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]);
+                        let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]);
+                        let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]);
+                        let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]);
+                        let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]);
+                        let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
+                        
+                        let vtipX = px2 - px1;
+                        let vtipY = py2 - py1;
+                        
+                        let rFin = ref.grosorPuntaAct / 2;
+                        let spikeLen = rFin * 2.0; 
+                        
+                        // Los 3 picos del astillado
+                        let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                        let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                        
+                        let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
+                        let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                        
+                        let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                        let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                        
+                        let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
+                        
+                        r.path.setAttribute("d", newD);
+                        r.joints[1].style.display = 'none'; 
+                    }
                 }
-                
-                p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
-                p.dom.setAttribute('opacity', op);
-                if (op <= 0) p.dom.style.display = 'none'; 
             }
         });
 
-        // FASE 2: RAMAS CAYENDO
-        ramasFlat.forEach(r => {
-            if (elapsed > r.fallTime && r.dom.style.display !== 'none') {
+        // FASE 1: HOJAS
+        hojasF.forEach(p => {
+            if (p.dom.style.display !== 'none') {
                 completado = false;
-                let age = elapsed - r.fallTime;
+                
+                if (elapsed > p.fallTime) {
+                    let age = elapsed - p.fallTime; 
+                    p.vy += 0.03; 
+                    p.vx += Math.sin(now * 0.003 + p.y) * 0.05; 
+                    p.vx *= 0.92; 
+                    p.vy *= 0.95; 
+                    p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
 
-                if (!r.isBroken) {
+                    let op = p.startOpacity;
+                    if (age > 700) {
+                        op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
+                    }
+                    
+                    p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
+                    p.dom.setAttribute('opacity', op);
+                    if (op <= 0) p.dom.style.display = 'none'; 
+                }
+            }
+        });
+
+        // FASE 2: RAMAS CON ANTICIPACIÓN
+        ramasFlat.forEach(r => {
+            if (r.dom.style.display !== 'none') {
+                completado = false;
+
+                if (elapsed > r.breakTime && !r.isBroken) {
                     r.isBroken = true;
                     let ref = r.ramaRef;
                     let dx = ref.endXAct - ref.startX;
@@ -306,103 +351,81 @@ function iniciarMuerte(callbackRenacer) {
                     let len = Math.hypot(dx, dy);
                     
                     if (len > 0) {
-                        let nx = -dy / len;
-                        let ny = dx / len;
+                        let nx = -dy / len; let ny = dx / len;
+                        let nxDir = dx / len; let nyDir = dy / len;
                         let rBase = (ref.grosorBaseAct / 2) * 0.6; 
+                        let rFin = ref.grosorPuntaAct / 2;
                         
                         let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase;
                         let bx2 = ref.startX - nx * rBase; let by2 = ref.startY - ny * rBase;
-                        let px = ref.endXAct; let py = ref.endYAct;
+                        let px1 = ref.endXAct + nx * rFin; let py1 = ref.endYAct + ny * rFin;
+                        let px2 = ref.endXAct - nx * rFin; let py2 = ref.endYAct - ny * rFin;
                         
+                        let vtipX = px2 - px1; let vtipY = py2 - py1;
+                        
+                        // Generamos el cuerpo dentado
                         let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*3.5;
                         let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*3.5;
                         let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*3.5;
                         let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*3.5;
 
-                        let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px} ${py} L ${j1x - nx*rBase} ${j1y - ny*rBase} L ${bx2} ${by2} Z`;
+                        let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px1} ${py1}`;
+
+                        // Mantenemos la punta afilada (astillas) también en el trozo que cae
+                        if (ref.gen < maxGenActual) {
+                            let spikeLen = rFin * 2.0;
+                            let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
+                            let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                            let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            sharpPath += ` L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y}`;
+                        } else {
+                            sharpPath += ` L ${ref.endXAct} ${ref.endYAct}`; // Las puntas jóvenes caen tal cual
+                        }
+                        
+                        sharpPath += ` L ${px2} ${py2} L ${j1x - nx*rBase} ${j1y - ny*rBase} L ${bx2} ${by2} Z`;
                         r.path.setAttribute("d", sharpPath);
                         r.joints.forEach(j => j.style.display = 'none');
                     }
                 }
                 
-                if (!r.tocandoSuelo) {
-                    r.vy += 0.6; 
-                    r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
-                    if (r.y + r.cy > groundY) {
-                        r.y = groundY - r.cy;
-                        r.vy *= -0.3; r.vx *= 0.5;
-                        let targetRot = (r.rot > 0) ? 90 : -90;
-                        r.rot += (targetRot - r.rot) * 0.2;
-                        if (Math.abs(r.vy) < 1.0) r.tocandoSuelo = true;
+                if (elapsed > r.fallTime) {
+                    let age = elapsed - r.fallTime;
+                    
+                    if (!r.tocandoSuelo) {
+                        r.vy += 0.6; 
+                        r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
+                        if (r.y + r.cy > groundY) {
+                            r.y = groundY - r.cy;
+                            r.vy *= -0.3; r.vx *= 0.5;
+                            let targetRot = (r.rot > 0) ? 90 : -90;
+                            r.rot += (targetRot - r.rot) * 0.2;
+                            if (Math.abs(r.vy) < 1.0) r.tocandoSuelo = true;
+                        }
                     }
-                }
 
-                let op = 1;
-                if (age > 800) { 
-                    op = Math.max(0, 1 - (age - 800) / 400);
-                }
+                    let op = 1;
+                    if (age > 800) { 
+                        op = Math.max(0, 1 - (age - 800) / 400);
+                    }
 
-                r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
-                r.dom.setAttribute('opacity', op);
-                if (op <= 0) r.dom.style.display = 'none';
+                    r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
+                    r.dom.setAttribute('opacity', op);
+                    if (op <= 0) r.dom.style.display = 'none';
+                }
             }
         });
 
-        // FASE 3: ASTILLADO TEMPRANO Y NECROSIS DEL TRONCO
+        // FASE 3: NECROSIS DEL TRONCO
         tronco.forEach(r => {
             if (r.dom.style.display !== 'none') {
                 completado = false;
                 
-                // ASTILLADO TEMPRANO: Se rompen las puntas del tronco al caer la primera rama fina
-                if (elapsed > primerQuiebreTime && !r.isSplintered) {
-                    r.isSplintered = true;
-                    let ref = r.ramaRef;
-                    let dx = ref.endXAct - ref.startX;
-                    let dy = ref.endYAct - ref.startY;
-                    let len = Math.hypot(dx, dy);
-                    
-                    if (len > 0) {
-                        let nxDir = dx / len; 
-                        let nyDir = dy / len;
-                        
-                        let currentD = r.path.getAttribute("d");
-                        let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
-                        let m = currentD.match(regex);
-                        
-                        if (m) {
-                            let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]);
-                            let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]);
-                            let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]);
-                            let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]);
-                            let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]);
-                            let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
-                            
-                            let vtipX = px2 - px1;
-                            let vtipY = py2 - py1;
-                            
-                            let rFin = ref.grosorPuntaAct / 2;
-                            let spikeLen = rFin * 2.0; 
-                            
-                            let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                            let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                            
-                            let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
-                            let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
-                            
-                            let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                            let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                            
-                            let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
-                            
-                            r.path.setAttribute("d", newD);
-                            r.joints[1].style.display = 'none'; 
-                        }
-                    }
-                }
-
-                // NECROSIS Y FADE OUT (Ocurre al final)
                 if (elapsed > trunkTime) {
                     let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
+                    
                     let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                     if (match) {
                         let rFill = Math.max(15, match[1] * (1 - pProgreso));

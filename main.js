@@ -1,307 +1,396 @@
-// MotorEntorno.js
+// main.js
 
-export const DICCIONARIO_ENTORNO = {
-    macetas: [
-        { id: 'estandar', nombre: 'Rectangular' },
-        { id: 'redonda', nombre: 'Tazón Suave' },
-        { id: 'alta', nombre: 'Alta Cascada' },
-        { id: 'plana', nombre: 'Plana Bosque' }
-    ],
-    esmaltes: [
-        { id: '#c05a41', nombre: 'Terracota' },
-        { id: '#2c3e50', nombre: 'Azul Cobalto' },
-        { id: '#34495e', nombre: 'Negro Mate' },
-        { id: '#8c8c91', nombre: 'Gris Concreto' },
-        { id: '#458b74', nombre: 'Verde Jade' }
-    ]
+import { MotorAudio } from './MotorAudio.js';
+import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js';
+import { Rama, rnd, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
+
+const domContext = {
+    layerPot: document.getElementById('layer-pot'),
+    layerTree: document.getElementById('layer-tree'),
+    layerLeaves: document.getElementById('layer-leaves'),
+    layerFlowers: document.getElementById('layer-flowers')
 };
 
-export class MotorEntorno {
-    constructor(ctx) {
-        this.ctx = ctx; 
-        this.skyEnabled = false;
-        this.skyContainer = document.getElementById('sky-bg');
-        
-        this.inyectarEstilosAtmosfericos();
-        this.construirCielo();
-    }
+const audioMotor = new MotorAudio();
+const entornoMotor = new MotorEntorno(domContext);
+domContext.audioMotor = audioMotor;
 
-    renderizarMaceta(forma, color) {
-        let svg = '';
-        switch(forma) {
-            case 'estandar':
-                svg = `<rect x="-45" y="0" width="90" height="18" fill="${color}" rx="2"/>
-                       <polygon points="-40,18 40,18 30,35 -30,35" fill="${color}" opacity="0.85"/>
-                       <rect x="-35" y="35" width="8" height="4" fill="${color}" opacity="0.6"/>
-                       <rect x="27" y="35" width="8" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
-            case 'redonda':
-                svg = `<path d="M -50 5 L 50 5 C 50 40 -50 40 -50 5 Z" fill="${color}" opacity="0.9"/>
-                       <rect x="-53" y="0" width="106" height="6" fill="${color}" rx="2"/>
-                       <rect x="-20" y="30" width="40" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
-            case 'alta':
-                svg = `<polygon points="-35,6 35,6 22,70 -22,70" fill="${color}" opacity="0.85"/>
-                       <rect x="-40" y="0" width="80" height="6" fill="${color}" rx="1"/>
-                       <rect x="-22" y="70" width="44" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
-            case 'plana':
-                svg = `<rect x="-80" y="0" width="160" height="10" fill="${color}" rx="1"/>
-                       <polygon points="-75,10 75,10 70,20 -70,20" fill="${color}" opacity="0.85"/>
-                       <rect x="-65" y="20" width="12" height="4" fill="${color}" opacity="0.6"/>
-                       <rect x="53" y="20" width="12" height="4" fill="${color}" opacity="0.6"/>`;
-                break;
-        }
-        this.ctx.layerPot.innerHTML = svg;
-    }
+let arbolBase = null;
+let animationFrameId = null;
+let iteracionGlobal = 0;
+let tiempoViento = 0;
 
-    construirCielo() {
-        if (!this.skyContainer) return;
-        
-        this.skyContainer.innerHTML = '';
-        this.skyContainer.className = 'atmosfera-inactiva'; 
+let isZenMode = false;
+let isAutoGrowing = false;
+let zenPausa = false;
 
-        const htmlAtmosfera = `
-            <div class="capa-cielo cielo-dia"></div>
-            <div class="capa-cielo cielo-atardecer"></div>
-            <div class="capa-cielo cielo-noche"></div>
-            <div class="capa-cielo cielo-amanecer"></div>
+let wakeLock = null; 
+let idleTimeout = null;
+let showLeaves = true;
+let showFlowers = true;
+let audioIniciado = false;
 
-            <div class="capa-estrellas"></div>
+const statsDisplay = document.getElementById('stats');
+const btnZenMain = document.getElementById('btn-zen-main');
+const dashboard = document.getElementById('dashboard');
+const btnAuto = document.getElementById('btn-auto');
 
-            <div class="capa-nubes" id="generador-nubes"></div>
+const ESTADO_CICLICO = {}; 
 
-            <div class="rueda-celeste">
-                <div class="astro sol"></div>
-                <div class="astro luna"></div>
+function construirInterfaz() {
+    const contenedorMorfologia = document.getElementById('ui-morfologia');
+    const contenedorParametros = document.getElementById('ui-parametros');
+
+    let htmlCiclicos = `<div class="grid-2">`;
+    htmlCiclicos += crearBotonCiclico('p-maceta-forma', 'Maceta', DICCIONARIO_ENTORNO.macetas);
+    htmlCiclicos += crearBotonCiclico('p-maceta-color', 'Color', DICCIONARIO_ENTORNO.esmaltes);
+    htmlCiclicos += crearBotonCiclico('p-forma', 'Hoja', DICCIONARIO_BOTANICO.hojas);
+    htmlCiclicos += crearBotonCiclico('p-flora', 'Flora', DICCIONARIO_BOTANICO.flora);
+    htmlCiclicos += `</div>`;
+    
+    contenedorMorfologia.innerHTML = htmlCiclicos;
+
+    let htmlParams = '';
+    PARAMETROS_MOTOR.forEach(param => {
+        const isDecimal = param.step % 1 !== 0;
+        const valTxt = isDecimal ? param.default.toFixed(1) : param.default;
+        const colorStyle = param.color ? `style="color: ${param.color};"` : '';
+        htmlParams += `
+            <div class="control-group">
+                <label><span ${colorStyle}>${param.label}</span> <span id="val-${param.id}" ${colorStyle}>${valTxt}</span></label>
+                <input type="range" id="${param.id}" data-key="${param.key}" min="${param.min}" max="${param.max}" step="${param.step}" value="${param.default}">
             </div>
         `;
-        
-        this.skyContainer.innerHTML = htmlAtmosfera;
-        this.generarNubesProcedurales();
-    }
+    });
+    contenedorParametros.innerHTML = htmlParams;
 
-// --- NUEVO: ALGORITMO PROCEDURAL DE NUBES CON PARALLAX 3D ---
-    generarNubesProcedurales() {
-        const contenedorNubes = document.getElementById('generador-nubes');
-        if (!contenedorNubes) return;
-        
-        // Limpiamos nubes anteriores por si el usuario apaga y enciende el cielo
-        contenedorNubes.innerHTML = '';
-        
-        // Genera entre 5 y 8 nubes para un cielo con buena profundidad
-        const numeroNubes = 5 + Math.floor(Math.random() * 4);
-        
-        for(let i = 0; i < numeroNubes; i++) {
-            const nube = document.createElement('div');
-            nube.className = 'nube procedural';
-            
-            // 1. LA VARIABLE MAESTRA DE PROFUNDIDAD (0.0 es muy lejos, 1.0 es frente a la cámara)
-            const profundidad = Math.random();
-            
-            // 2. FÍSICAS ATADAS A LA PROFUNDIDAD:
-            // Tamaño: Lejos = pequeñas (0.2x), Cerca = enormes (1.2x)
-            const escala = 0.2 + (profundidad * 1.0);
-            
-            // Velocidad: Lejos = cruzan lentísimo (150s), Cerca = cruzan rápido (40s)
-            const duracionViaje = 150 - (profundidad * 110);
-            
-            // Opacidad (Perspectiva Atmosférica): Lejos = tenues (15%), Cerca = densas (70%)
-            const opacidadBase = 0.15 + (profundidad * 0.55);
-            
-            // Z-Index: Las nubes cercanas deben tapar visualmente a las lejanas
-            const ordenCapa = Math.floor(profundidad * 10);
-
-            // Altura y esparcimiento en la pantalla
-            const alturaY = Math.random() * 45; // 0% a 45% del alto del cielo
-            const retrasoInicial = Math.random() * -150; // Para que ya estén flotando al abrir
-            
-            // Aplicamos las físicas al CSS
-            nube.style.top = `${alturaY}%`;
-            nube.style.transform = `scale(${escala})`;
-            nube.style.opacity = opacidadBase;
-            nube.style.zIndex = ordenCapa;
-            nube.style.animation = `flotar ${duracionViaje}s infinite linear ${retrasoInicial}s`;
-            
-            contenedorNubes.appendChild(nube);
+    ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
+        const btn = document.getElementById(id);
+        if(btn) {
+            btn.addEventListener('click', (e) => {
+                let state = ESTADO_CICLICO[id];
+                state.index = (state.index + 1) % state.opciones.length; 
+                let opt = state.opciones[state.index];
+                
+                e.currentTarget.setAttribute('data-value', opt.id);
+                e.currentTarget.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
+                
+                if(id.startsWith('p-maceta')) updatePot();
+            });
         }
-    }
+    });
 
-    inyectarEstilosAtmosfericos() {
-        if (document.getElementById('css-entorno')) return;
+    document.querySelectorAll('#ui-parametros input[type="range"]').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const isDecimal = e.target.step % 1 !== 0;
+            let val = isDecimal ? parseFloat(e.target.value).toFixed(1) : e.target.value;
+            if(isDecimal && Number.isInteger(parseFloat(val))) val += ".0";
+            document.getElementById(`val-${e.target.id}`).textContent = val;
+        });
+    });
+}
 
-        const estilo = document.createElement('style');
-        estilo.id = 'css-entorno';
-        
-        const cicloSegundos = 120; 
+function crearBotonCiclico(id, prefix, opciones) {
+    ESTADO_CICLICO[id] = { index: 0, opciones, prefix }; 
+    return `<button id="${id}" class="action-btn cyclic-btn" data-value="${opciones[0].id}">${prefix}: <span>${opciones[0].nombre}</span></button>`;
+}
 
-        estilo.innerHTML = `
-            #sky-bg {
-                background: none !important;
-                overflow: hidden;
+export function getParams() {
+    const params = {
+        formaHoja: document.getElementById('p-forma') ? document.getElementById('p-forma').getAttribute('data-value') : 'ovalada',
+        tipoFlora: document.getElementById('p-flora') ? document.getElementById('p-flora').getAttribute('data-value') : 'ninguno',
+    };
+    
+    PARAMETROS_MOTOR.forEach(p => {
+        let el = document.getElementById(p.id);
+        if(el) {
+            let rawVal = el.value;
+            if (p.id === 'p-branch' || p.id === 'p-acc' || p.id === 'p-viento' || p.id === 'p-lenVar') {
+                params[p.key] = parseFloat(rawVal) / 100;
+            } else {
+                params[p.key] = parseFloat(rawVal);
             }
-
-            .atmosfera-inactiva * {
-                animation-play-state: paused !important;
-                opacity: 0 !important;
-                transition: opacity 1s ease;
-            }
-
-            body.bg-sky-active #sky-bg * {
-                animation-play-state: running;
-            }
-
-            .capa-cielo {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                opacity: 0; z-index: 1;
-            }
-            body.bg-sky-active .cielo-dia { background: linear-gradient(to bottom, #54b1f5 0%, #e0f2fe 80%); animation: cicloDia ${cicloSegundos}s infinite linear; }
-            body.bg-sky-active .cielo-atardecer { background: linear-gradient(to bottom, #4c3b71 0%, #f68989 60%, #ffc371 100%); animation: cicloAtardecer ${cicloSegundos}s infinite linear; }
-            body.bg-sky-active .cielo-noche { background: linear-gradient(to bottom, #0b1320 0%, #1a2a42 100%); animation: cicloNoche ${cicloSegundos}s infinite linear; }
-            body.bg-sky-active .cielo-amanecer { background: linear-gradient(to bottom, #8ab3d9 0%, #ffb07c 80%); animation: cicloAmanecer ${cicloSegundos}s infinite linear; }
-
-            .capa-estrellas {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;
-                background-image: 
-                    radial-gradient(1px 1px at 10% 20%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(1px 1px at 30% 60%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(2px 2px at 40% 30%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(1px 1px at 70% 80%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(2px 2px at 80% 10%, #fff, rgba(0,0,0,0)),
-                    radial-gradient(1px 1px at 90% 40%, #fff, rgba(0,0,0,0));
-                background-size: 200px 200px;
-                opacity: 0;
-            }
-            body.bg-sky-active .capa-estrellas {
-                animation: cicloNoche ${cicloSegundos}s infinite linear, parpadeo 4s infinite alternate ease-in-out;
-            }
-
-            /* --- FÍSICA CELESTE MEJORADA --- */
-            .rueda-celeste {
-                position: absolute;
-                top: 50%; left: 50%;
-                /* Aumentamos enormemente la rueda para que el eje esté lejanísimo */
-                width: 150vh; height: 150vh; 
-                margin-left: -75vh; 
-                margin-top: -25vh; /* Bajamos el eje para que los astros rocen el borde superior */
-                border-radius: 50%;
-                z-index: 3;
-            }
-            body.bg-sky-active .rueda-celeste {
-                animation: rotacionCeleste ${cicloSegundos}s infinite linear;
-            }
-
-            .astro { position: absolute; left: 50%; border-radius: 50%; }
-            
-            /* SOL: Solo un aura etérea enorme */
-            .sol {
-                width: 400px; height: 400px;
-                margin-left: -200px;
-                top: -200px; 
-                background: radial-gradient(circle, rgba(255,245,200,0.8) 0%, rgba(255,235,160,0.2) 40%, rgba(255,255,255,0) 70%);
-                /* Sin box-shadow duro, todo suave */
-            }
-            
-            /* LUNA: Opacidad controlada por animación */
-            .luna {
-                width: 60px; height: 60px;
-                margin-left: -30px;
-                bottom: -30px; 
-                background: #f4f6f0;
-                box-shadow: 0 0 30px rgba(255, 255, 255, 0.6), inset -10px -10px 15px rgba(0,0,0,0.2);
-            }
-            body.bg-sky-active .luna {
-                animation: opacidadLuna ${cicloSegundos}s infinite linear;
-            }
-
-            /* --- CSS PARA NUBES PROCEDURALES --- */
-            .capa-nubes { position: absolute; top: 0; left: 0; width: 100%; height: 60%; z-index: 4; }
-            .nube.procedural {
-                position: absolute; background: white; border-radius: 50px;
-                width: 150px; height: 45px;
-                filter: blur(5px);
-            }
-            .nube.procedural::before {
-                content: ''; position: absolute; background: white; border-radius: 50%;
-                width: 80px; height: 80px; top: -35px; left: 25px;
-            }
-            .nube.procedural::after {
-                content: ''; position: absolute; background: white; border-radius: 50%;
-                width: 60px; height: 60px; top: -20px; left: 85px;
-            }
-
-            body.bg-sky-active .nube.procedural {
-                animation-play-state: running;
-            }
-
-            /* --- KEYFRAMES --- */
-            @keyframes rotacionCeleste {
-                0% { transform: rotate(0deg); }    /* Mediodía */
-                25% { transform: rotate(90deg); }  /* Atardecer */
-                50% { transform: rotate(180deg); } /* Medianoche */
-                75% { transform: rotate(270deg); } /* Amanecer */
-                100% { transform: rotate(360deg); }
-            }
-
-            /* La luna solo es visible de noche (entre el 35% y 65% de la rotación) */
-            @keyframes opacidadLuna {
-                0%, 30% { opacity: 0; }
-                40%, 60% { opacity: 0.85; }
-                70%, 100% { opacity: 0; }
-            }
-
-            @keyframes cicloDia {
-                0%, 25% { opacity: 1; }
-                35%, 85% { opacity: 0; }
-                95%, 100% { opacity: 1; }
-            }
-            @keyframes cicloAtardecer {
-                0%, 15% { opacity: 0; }
-                25%, 35% { opacity: 1; }
-                45%, 100% { opacity: 0; }
-            }
-            @keyframes cicloNoche {
-                0%, 35% { opacity: 0; }
-                45%, 75% { opacity: 1; }
-                85%, 100% { opacity: 0; }
-            }
-            @keyframes cicloAmanecer {
-                0%, 75% { opacity: 0; }
-                85%, 95% { opacity: 1; }
-                100% { opacity: 0; }
-            }
-
-            @keyframes flotar {
-                0% { transform: translateX(-20vw) scale(var(--scale, 1)); }
-                100% { transform: translateX(120vw) scale(var(--scale, 1)); }
-            }
-            @keyframes parpadeo {
-                0% { filter: opacity(0.3); }
-                100% { filter: opacity(1); }
-            }
-        `;
-        document.head.appendChild(estilo);
-    }
-
-    toggleSky() {
-        this.skyEnabled = !this.skyEnabled;
-        
-        if (this.skyEnabled) {
-            document.body.classList.add('bg-sky-active');
-            this.skyContainer.classList.remove('atmosfera-inactiva'); 
-            
-            // Regenerar nubes nuevas si se apaga y vuelve a encender para dar frescura
-            this.generarNubesProcedurales();
-        } else {
-            document.body.classList.remove('bg-sky-active');
-            setTimeout(() => {
-                if(!this.skyEnabled) {
-                    this.skyContainer.classList.add('atmosfera-inactiva');
-                    // Limpia las nubes para no saturar el DOM cuando está apagado
-                    document.getElementById('generador-nubes').innerHTML = ''; 
-                }
-            }, 1000);
         }
-        return this.skyEnabled;
+    });
+    return params;
+}
+
+function actualizarUI(id, valor) {
+    let el = document.getElementById(id);
+    if(!el) return;
+    
+    if(el.classList.contains('cyclic-btn')) {
+        let state = ESTADO_CICLICO[id];
+        let newIndex = state.opciones.findIndex(o => o.id === valor);
+        if(newIndex !== -1) {
+            state.index = newIndex;
+            el.setAttribute('data-value', valor);
+            el.innerHTML = `${state.prefix}: <span>${state.opciones[newIndex].nombre}</span>`;
+        }
+    } else {
+        el.value = valor;
+        el.dispatchEvent(new Event('input'));
     }
 }
+
+const updatePot = () => {
+    let elForma = document.getElementById('p-maceta-forma');
+    let elColor = document.getElementById('p-maceta-color');
+    if(elForma && elColor) {
+        entornoMotor.renderizarMaceta(elForma.getAttribute('data-value'), elColor.getAttribute('data-value'));
+    }
+};
+
+async function solicitarWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+    } catch (err) { }
+}
+
+function liberarWakeLock() {
+    if (wakeLock !== null) {
+        wakeLock.release();
+        wakeLock = null;
+    }
+}
+
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock === null && document.visibilityState === 'visible' && isZenMode) {
+        solicitarWakeLock();
+    }
+});
+
+function arrancarAudioSilencioso() {
+    if(!audioIniciado) {
+        audioIniciado = true;
+        let btnSfx = document.getElementById('btn-sfx');
+        let btnMus = document.getElementById('btn-music');
+        
+        if (btnSfx && !btnSfx.classList.contains('active-toggle')) btnSfx.click();
+        if (btnMus && !btnMus.classList.contains('active-toggle')) btnMus.click();
+    }
+}
+
+function resetTimerIdle() {
+    document.body.classList.remove('zen-idle');
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(() => { 
+        if (isZenMode) document.body.classList.add('zen-idle'); 
+    }, 5000);
+}
+
+window.addEventListener('mousemove', resetTimerIdle);
+window.addEventListener('touchstart', () => {
+    arrancarAudioSilencioso();
+    resetTimerIdle();
+}, { passive: true });
+window.addEventListener('click', () => {
+    arrancarAudioSilencioso();
+    resetTimerIdle();
+});
+
+document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
+document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
+document.getElementById('btn-reset').addEventListener('click', inicializarArbol);
+
+document.getElementById('btn-step').addEventListener('click', () => {
+    if(arbolBase && iteracionGlobal <= 18) {
+        arbolBase.crecer(1.0, getParams());
+        iteracionGlobal += 1.0;
+        statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
+    }
+});
+
+btnAuto.addEventListener('click', (e) => {
+    isAutoGrowing = !isAutoGrowing;
+    if(isAutoGrowing) {
+        e.target.classList.add('active-toggle');
+        e.target.innerHTML = "Auto-Crecer: ON";
+    } else {
+        e.target.classList.remove('active-toggle');
+        e.target.innerHTML = "Auto-Crecer: OFF";
+    }
+});
+
+document.getElementById('btn-hojas').addEventListener('click', (e) => { 
+    showLeaves = !showLeaves; 
+    e.target.classList.toggle('active-toggle', showLeaves); 
+});
+document.getElementById('btn-flores').addEventListener('click', (e) => { 
+    showFlowers = !showFlowers; 
+    e.target.classList.toggle('active-toggle', showFlowers); 
+});
+
+document.getElementById('btn-sfx').addEventListener('click', (e) => {
+    const activado = audioMotor.toggleSfx();
+    e.target.classList.toggle('active-toggle', activado);
+    e.target.innerHTML = activado ? "🍃 SFX: ON" : "🍃 SFX: OFF";
+});
+
+document.getElementById('btn-music').addEventListener('click', (e) => {
+    const activado = audioMotor.toggleMusic();
+    e.target.classList.toggle('active-toggle', activado);
+    e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF";
+});
+
+document.getElementById('btn-fondo').addEventListener('click', (e) => {
+    const activado = entornoMotor.toggleSky();
+    e.target.classList.toggle('active-toggle', activado);
+    e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF";
+});
+
+btnZenMain.addEventListener('click', (e) => {
+    e.stopPropagation(); 
+    isZenMode = !isZenMode;
+    if (isZenMode) {
+        document.body.classList.add('zen-active');
+        btnZenMain.classList.add('active');
+        zenPausa = false;
+        
+        isAutoGrowing = true;
+        btnAuto.classList.add('active-toggle');
+        btnAuto.innerHTML = "Auto-Crecer: ON";
+        
+        if (iteracionGlobal > 18) { document.getElementById('btn-mutar').click(); } 
+        if (audioIniciado) audioMotor.resumeMusic();
+        
+        solicitarWakeLock();
+        resetTimerIdle(); 
+    } else {
+        document.body.classList.remove('zen-active');
+        document.body.classList.remove('zen-idle');
+        btnZenMain.classList.remove('active');
+        audioMotor.stopMusic();
+        liberarWakeLock();
+    }
+});
+
+const PRESETS_BOTANICOS = {
+    pino:     { mForma: 'estandar', mColor: '#c05a41', viento: 10, length: 25, lenVar: 10, angle: 20, branch: 45, acc: 10, gen: 5, hojas: 5, flor: 8, forma: 'huso', flora: 'ninguno', edadRam: 3.5 }, 
+    roble:    { mForma: 'plana',    mColor: '#2c3e50', viento: 25, length: 18, lenVar: 30, angle: 50, branch: 75, acc: 35, gen: 6, hojas: 18, flor: 7, forma: 'ovalada', flora: 'ninguno', edadRam: 2.8 },
+    arbusto:  { mForma: 'redonda',  mColor: '#458b74', viento: 30, length: 8,  lenVar: 50, angle: 75, branch: 95, acc: 70, gen: 4, hojas: 25, flor: 4, forma: 'circular', flora: 'baya-roja', edadRam: 1.5 },
+    cipres:   { mForma: 'alta',     mColor: '#8c8c91', viento: 15, length: 15, lenVar: 15, angle: 10, branch: 80, acc: 50, gen: 6, hojas: 8, flor: 8, forma: 'larga', flora: 'ninguno', edadRam: 3.0 },
+    cerezo:   { mForma: 'redonda',  mColor: '#2c3e50', viento: 40, length: 17, lenVar: 40, angle: 45, branch: 70, acc: 25, gen: 6, hojas: 4, flor: 5, forma: 'ovalada', flora: 'flor-rosa', edadRam: 2.5 },
+    limonero: { mForma: 'redonda',  mColor: '#c05a41', viento: 20, length: 16, lenVar: 25, angle: 55, branch: 75, acc: 30, gen: 5, hojas: 16, flor: 5, forma: 'ovalada', flora: 'limon', edadRam: 2.8 }
+};
+
+window.aplicarPreset = function(tipo) {
+    const p = PRESETS_BOTANICOS[tipo];
+    actualizarUI('p-maceta-forma', p.mForma);
+    actualizarUI('p-maceta-color', p.mColor);
+    actualizarUI('p-forma', p.forma);
+    actualizarUI('p-flora', p.flora);
+    actualizarUI('p-viento', p.viento);
+    actualizarUI('p-edadRam', p.edadRam);
+    actualizarUI('p-length', p.length);
+    actualizarUI('p-lenVar', p.lenVar);
+    actualizarUI('p-angle', p.angle);
+    actualizarUI('p-branch', p.branch);
+    actualizarUI('p-acc', p.acc);
+    actualizarUI('p-gen', p.gen);
+    actualizarUI('p-hojas', p.hojas);
+    actualizarUI('p-flor', p.flor);
+    
+    updatePot();
+    inicializarArbol();
+}
+
+document.getElementById('btn-mutar').addEventListener('click', () => {
+    const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
+    const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
+    const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
+    const tFlora = DICCIONARIO_BOTANICO.flora[Math.floor(Math.random() * DICCIONARIO_BOTANICO.flora.length)].id;
+    
+    actualizarUI('p-maceta-forma', fMaceta);
+    actualizarUI('p-maceta-color', cMaceta);
+    actualizarUI('p-forma', fHoja);
+    actualizarUI('p-flora', tFlora);
+    
+    actualizarUI('p-viento', Math.floor(rnd(10, 80)));
+    actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1));
+    actualizarUI('p-length', Math.floor(rnd(10, 25)));
+    actualizarUI('p-lenVar', Math.floor(rnd(0, 80)));
+    actualizarUI('p-angle', Math.floor(rnd(15, 75)));
+    actualizarUI('p-branch', Math.floor(rnd(40, 90)));
+    actualizarUI('p-acc', Math.floor(rnd(10, 60)));
+    actualizarUI('p-gen', Math.floor(rnd(4, 7)));
+    actualizarUI('p-hojas', Math.floor(rnd(5, 25)));
+    actualizarUI('p-flor', Math.floor(rnd(3, 8)));
+    
+    updatePot();
+    inicializarArbol();
+});
+
+function bucleAnimacion() {
+    tiempoViento += 0.016; 
+    let paramsActuales = getParams();
+    
+    audioMotor.actualizarViento(tiempoViento, paramsActuales.viento * 100);
+
+    if ((isZenMode || isAutoGrowing) && !zenPausa && arbolBase) {
+        let deltaZen = 0.015; 
+        arbolBase.crecer(deltaZen, paramsActuales);
+        iteracionGlobal += deltaZen;
+        statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
+
+        if (iteracionGlobal > 18) {
+            zenPausa = true;
+            if(isZenMode) {
+                setTimeout(() => { if(isZenMode) { document.getElementById('btn-mutar').click(); } }, 4000); 
+            } else {
+                isAutoGrowing = false;
+                btnAuto.classList.remove('active-toggle');
+                btnAuto.innerHTML = "Auto-Crecer: OFF";
+            }
+        }
+    }
+
+    if (arbolBase) {
+        arbolBase.animarYRenderizar(0, tiempoViento, paramsActuales.viento, showLeaves, showFlowers);
+    }
+    
+    animationFrameId = requestAnimationFrame(bucleAnimacion);
+}
+
+function inicializarArbol() {
+    domContext.layerTree.innerHTML = ''; 
+    domContext.layerLeaves.innerHTML = ''; 
+    domContext.layerFlowers.innerHTML = '';
+    
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    
+    arbolBase = new Rama(0, 0, 0, -90, null, getParams(), domContext);
+    iteracionGlobal = 0;
+    zenPausa = false;
+    statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
+    
+    bucleAnimacion();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    construirInterfaz();
+    window.aplicarPreset('pino'); 
+    
+    isZenMode = true;
+    document.body.classList.add('zen-active');
+    btnZenMain.classList.add('active');
+    
+    isAutoGrowing = true;
+    btnAuto.classList.add('active-toggle');
+    btnAuto.innerHTML = "Auto-Crecer: ON";
+
+    // NUEVO: Enciende el fondo de cielo por defecto al cargar
+    let btnFondo = document.getElementById('btn-fondo');
+    if (btnFondo && !btnFondo.classList.contains('active-toggle')) {
+        btnFondo.click();
+    }
+    
+    solicitarWakeLock();
+    resetTimerIdle();
+});

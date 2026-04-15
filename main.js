@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR: ANTICIPACIÓN Y FÍSICA ---
+// --- ORQUESTADOR: MUERTE Y ASTILLAMIENTO DETALLADO ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -201,9 +201,9 @@ function iniciarMuerte(callbackRenacer) {
             dom: rama.g, path: rama.path, joints: [rama.jointBase, rama.jointTip],
             x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -0.5,
             cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
-            colorOriginal: rama.currentFill, fallTime: 0, breakTime: 0, tocandoSuelo: false,
+            colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false,
             isBroken: false, 
-            isSplintered: false, 
+            isSplintered: false, // Candado para astillar el tronco
             ramaRef: rama 
         };
 
@@ -240,18 +240,14 @@ function iniciarMuerte(callbackRenacer) {
             } else {
                 ramasPorGen[g].forEach(r => {
                     r.fallTime = fallTimeCursor + Math.random() * 150;
-                    // MAGIA: La rama se rompe 400ms ANTES de empezar a caer
-                    r.breakTime = r.fallTime - 400; 
                     ramasFlat.push(r);
                 });
+                fallTimeCursor += 500; 
                 
                 if (audioMotor.sfxEnabled) {
-                    // El crujido suena en el instante de la rotura, no de la caída
-                    let audioTime = fallTimeCursor - 400; 
-                    setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), Math.max(0, audioTime));
+                    let audioTime = fallTimeCursor;
+                    setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), audioTime);
                 }
-                
-                fallTimeCursor += 500; 
             }
         }
     }
@@ -265,38 +261,36 @@ function iniciarMuerte(callbackRenacer) {
         let elapsed = now - startTime;
         let completado = true;
 
-        // FASE 1: HOJAS
+        // FASE 1: HOJAS SUAVES
         hojasF.forEach(p => {
-            if (p.dom.style.display !== 'none') {
+            if (elapsed > p.fallTime && p.dom.style.display !== 'none') {
                 completado = false;
+                let age = elapsed - p.fallTime; 
                 
-                if (elapsed > p.fallTime) {
-                    let age = elapsed - p.fallTime; 
-                    p.vy += 0.03; 
-                    p.vx += Math.sin(now * 0.003 + p.y) * 0.05; 
-                    p.vx *= 0.92; 
-                    p.vy *= 0.95; 
-                    p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
+                p.vy += 0.03; 
+                p.vx += Math.sin(now * 0.003 + p.y) * 0.05; 
+                p.vx *= 0.92; 
+                p.vy *= 0.95; 
+                p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
 
-                    let op = p.startOpacity;
-                    if (age > 700) {
-                        op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
-                    }
-                    
-                    p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
-                    p.dom.setAttribute('opacity', op);
-                    if (op <= 0) p.dom.style.display = 'none'; 
+                let op = p.startOpacity;
+                if (age > 700) {
+                    op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
                 }
+                
+                p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
+                p.dom.setAttribute('opacity', op);
+                if (op <= 0) p.dom.style.display = 'none'; 
             }
         });
 
-        // FASE 2: RAMAS CON ANTICIPACIÓN
+        // FASE 2: RAMAS ROMPIÉNDOSE Y CAYENDO
         ramasFlat.forEach(r => {
-            if (r.dom.style.display !== 'none') {
+            if (elapsed > r.fallTime && r.dom.style.display !== 'none') {
                 completado = false;
+                let age = elapsed - r.fallTime;
 
-                // 2A: Rotura Visual (Ocurre 400ms antes de caer)
-                if (elapsed > r.breakTime && !r.isBroken) {
+                if (!r.isBroken) {
                     r.isBroken = true;
                     let ref = r.ramaRef;
                     let dx = ref.endXAct - ref.startX;
@@ -323,42 +317,37 @@ function iniciarMuerte(callbackRenacer) {
                     }
                 }
                 
-                // 2B: Caída Física
-                if (elapsed > r.fallTime) {
-                    let age = elapsed - r.fallTime;
-                    
-                    if (!r.tocandoSuelo) {
-                        r.vy += 0.6; 
-                        r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
-                        if (r.y + r.cy > groundY) {
-                            r.y = groundY - r.cy;
-                            r.vy *= -0.3; r.vx *= 0.5;
-                            let targetRot = (r.rot > 0) ? 90 : -90;
-                            r.rot += (targetRot - r.rot) * 0.2;
-                            if (Math.abs(r.vy) < 1.0) r.tocandoSuelo = true;
-                        }
+                if (!r.tocandoSuelo) {
+                    r.vy += 0.6; 
+                    r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
+                    if (r.y + r.cy > groundY) {
+                        r.y = groundY - r.cy;
+                        r.vy *= -0.3; r.vx *= 0.5;
+                        let targetRot = (r.rot > 0) ? 90 : -90;
+                        r.rot += (targetRot - r.rot) * 0.2;
+                        if (Math.abs(r.vy) < 1.0) r.tocandoSuelo = true;
                     }
-
-                    let op = 1;
-                    if (age > 800) { 
-                        op = Math.max(0, 1 - (age - 800) / 400);
-                    }
-
-                    r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
-                    r.dom.setAttribute('opacity', op);
-                    if (op <= 0) r.dom.style.display = 'none';
                 }
+
+                let op = 1;
+                if (age > 800) { 
+                    op = Math.max(0, 1 - (age - 800) / 400);
+                }
+
+                r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
+                r.dom.setAttribute('opacity', op);
+                if (op <= 0) r.dom.style.display = 'none';
             }
         });
 
-        // FASE 3: NECROSIS DEL TRONCO
-        tronco.forEach(r => {
-            if (r.dom.style.display !== 'none') {
-                completado = false;
-                
-                if (elapsed > trunkTime) {
-                    let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
+        // FASE 3: NECROSIS DEL TRONCO Y ASTILLADO DE PUNTAS
+        if (elapsed > trunkTime) {
+            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
+            tronco.forEach(r => {
+                if (r.dom.style.display !== 'none') {
+                    completado = false;
                     
+                    // MAGIA VISUAL: Tallar el tronco sin perder su grosor
                     if (!r.isSplintered) {
                         r.isSplintered = true;
                         let ref = r.ramaRef;
@@ -371,6 +360,7 @@ function iniciarMuerte(callbackRenacer) {
                             let nyDir = dy / len;
                             
                             let currentD = r.path.getAttribute("d");
+                            // Regex para capturar las coordenadas exactas de la curva Bézier
                             let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
                             let m = currentD.match(regex);
                             
@@ -386,8 +376,9 @@ function iniciarMuerte(callbackRenacer) {
                                 let vtipY = py2 - py1;
                                 
                                 let rFin = ref.grosorPuntaAct / 2;
-                                let spikeLen = rFin * 2.0; 
+                                let spikeLen = rFin * 2.0; // Los picos se extienden en proporción al grosor de la rama
                                 
+                                // Creamos tres triángulos afilados en la punta plana
                                 let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
                                 let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
                                 
@@ -397,14 +388,16 @@ function iniciarMuerte(callbackRenacer) {
                                 let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
                                 let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
                                 
+                                // Reconstruimos el SVG fusionando las curvas gruesas con los picos filosos
                                 let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
                                 
                                 r.path.setAttribute("d", newD);
-                                r.joints[1].style.display = 'none'; 
+                                r.joints[1].style.display = 'none'; // Apagamos la esfera de la punta
                             }
                         }
                     }
 
+                    // Transición de color hacia el negro
                     let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                     if (match) {
                         let rFill = Math.max(15, match[1] * (1 - pProgreso));
@@ -412,7 +405,7 @@ function iniciarMuerte(callbackRenacer) {
                         let bFill = Math.max(15, match[3] * (1 - pProgreso));
                         let newColor = `rgb(${rFill},${gFill},${bFill})`; 
                         r.path.setAttribute('fill', newColor);
-                        r.joints[0].setAttribute('fill', newColor); 
+                        r.joints[0].setAttribute('fill', newColor); // Solo oscurecemos la junta base, la punta ya no existe
                     }
                     
                     if (elapsed > trunkTime + 1000) {
@@ -422,6 +415,8 @@ function iniciarMuerte(callbackRenacer) {
                     }
                 }
             });
+        } else {
+            if (tronco.length > 0) completado = false; 
         }
 
         if (!completado) {

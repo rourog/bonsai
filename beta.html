@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bonsái Paramétrico - Motor Audiovisual Estable</title>
+    <title>Bonsái Paramétrico - Audio Orgánico Mejorado</title>
     <style>
         :root {
             --bg-color: #f5f5f7;
@@ -107,7 +107,6 @@
             100% { transform: translate(-50%, -50%) scale(12); opacity: 0; }
         }
 
-        /* Botón de Engrane Puro */
         .btn-config {
             background: rgba(255, 255, 255, 0.9);
             border: 1px solid var(--border);
@@ -328,7 +327,7 @@
     </div>
 
     <script>
-        // --- MOTOR AUDIOVISUAL ---
+        // --- MOTOR AUDIOVISUAL MEJORADO ---
         let audioCtx = null;
         let sfxEnabled = false;
         let musicEnabled = false;
@@ -374,6 +373,7 @@
             } catch (e) { console.error("Error iniciando viento:", e); }
         }
 
+        // FUNCIÓN PLAYPOP MODIFICADA PARA SER MUCHO MÁS SUAVE Y SATISFACTORIA
         function playPop() {
             if (!sfxEnabled || !audioCtx) return;
             try {
@@ -383,15 +383,21 @@
                 gain.connect(audioCtx.destination);
                 
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
                 
-                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                // 1. Tono aleatorio para que los solapamientos suenen a campanitas armónicas
+                const freq = 600 + Math.random() * 800; // Entre 600Hz y 1400Hz
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                // Caída de tono más sutil
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.8, audioCtx.currentTime + 0.1);
+                
+                // 2. Volumen y Envolvente (Ataque y decaimiento suaves, volumen bajito)
+                gain.gain.setValueAtTime(0, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.04, audioCtx.currentTime + 0.01); // Fade-in sutil evita clics
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15); // Fade-out suave
                 
                 osc.start(audioCtx.currentTime);
-                osc.stop(audioCtx.currentTime + 0.1);
-            } catch (e) {}
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch (e) { /* Error silencioso de seguridad */ }
         }
 
         function playGenerativeChime() {
@@ -638,7 +644,7 @@
                 
                 layerFlowers.appendChild(this.dom);
                 
-                playPop();
+                playPop(); // Ahora usa la versión acústica suavizada
             }
 
             obtenerDatosMorfologicos(tipo) {
@@ -746,7 +752,6 @@
                 this.podada = false; 
                 this.seed = Math.random() * 1000; 
                 
-                // HERENCIA GENÉTICA: El hijo siempre copia el color base del padre
                 if (this.padre) {
                     this.baseBarkColor = this.padre.baseBarkColor;
                 } else {
@@ -1023,7 +1028,6 @@
         function inicializar() {
             layerTree.innerHTML = ''; layerLeaves.innerHTML = ''; layerFlowers.innerHTML = '';
             
-            // CORRECCIÓN CRÍTICA: Liberar el slot de animación
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -1034,7 +1038,7 @@
             zenPausa = false;
             statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
             
-            // Re-inicia el motor de físicas
+            // Garantizar que el motor vuelva a encenderse siempre
             bucleAnimacion();
             resetTimerIdle();
         }
@@ -1074,9 +1078,9 @@
 
         // ARRANQUE SEGURO
         renderizarMaceta();
-        aplicarPreset('pino');
+        aplicarPreset('roble'); // Preset default seguro
+        inicializar(); 
         
-        // Activa visualmente el Modo Zen y el motor arranca solo
         isZenMode = true;
         document.body.classList.add('zen-active');
         btnZenMain.classList.add('active');

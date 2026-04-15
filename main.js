@@ -20,8 +20,12 @@ let arbolBase = null;
 let animationFrameId = null;
 let iteracionGlobal = 0;
 let tiempoViento = 0;
+
+// Variables de Estado Independientes
 let isZenMode = false;
+let isAutoGrowing = false; // Controla si el árbol crece automáticamente (fuera del Zen)
 let zenPausa = false;
+
 let idleTimeout = null;
 let showLeaves = true;
 let showFlowers = true;
@@ -32,13 +36,12 @@ const btnZenMain = document.getElementById('btn-zen-main');
 const dashboard = document.getElementById('dashboard');
 
 // --- GENERADOR DE INTERFAZ CÍCLICA ---
-const ESTADO_CICLICO = {}; // Guarda el índice actual de cada botón cíclico
+const ESTADO_CICLICO = {}; 
 
 function construirInterfaz() {
     const contenedorMorfologia = document.getElementById('ui-morfologia');
     const contenedorParametros = document.getElementById('ui-parametros');
 
-    // Generar Botones Cíclicos en lugar de Selects (Ahorro Masivo de Espacio)
     let htmlCiclicos = `<div class="grid-2">`;
     htmlCiclicos += crearBotonCiclico('p-maceta-forma', 'Maceta', DICCIONARIO_ENTORNO.macetas);
     htmlCiclicos += crearBotonCiclico('p-maceta-color', 'Color', DICCIONARIO_ENTORNO.esmaltes);
@@ -48,7 +51,6 @@ function construirInterfaz() {
     
     contenedorMorfologia.innerHTML = htmlCiclicos;
 
-    // Generar Sliders Paramétricos
     PARAMETROS_MOTOR.forEach(param => {
         const isDecimal = param.step % 1 !== 0;
         const valTxt = isDecimal ? param.default.toFixed(1) : param.default;
@@ -62,25 +64,20 @@ function construirInterfaz() {
         `;
     });
 
-    // Event Listeners para Botones Cíclicos
     ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
         document.getElementById(id).addEventListener('click', (e) => {
             let state = ESTADO_CICLICO[id];
-            // Avanza al siguiente índice de la lista y reinicia si llega al final
             state.index = (state.index + 1) % state.opciones.length; 
             let opt = state.opciones[state.index];
             
-            // Actualiza el valor interno y visual
-            e.target.setAttribute('data-value', opt.id);
-            e.target.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
+            // Actualiza valor e UI
+            e.currentTarget.setAttribute('data-value', opt.id);
+            e.currentTarget.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
             
-            if(id.startsWith('p-maceta')) {
-                updatePot();
-            }
+            if(id.startsWith('p-maceta')) updatePot();
         });
     });
 
-    // Event Listeners para Sliders
     document.querySelectorAll('#ui-parametros input[type="range"]').forEach(input => {
         input.addEventListener('input', (e) => {
             const isDecimal = e.target.step % 1 !== 0;
@@ -91,18 +88,13 @@ function construirInterfaz() {
     });
 }
 
-// Función Auxiliar para crear el HTML del botón cíclico
 function crearBotonCiclico(id, prefix, opciones) {
-    ESTADO_CICLICO[id] = { index: 0, opciones, prefix }; // Inicia en el primer elemento
+    ESTADO_CICLICO[id] = { index: 0, opciones, prefix }; 
     return `<button id="${id}" class="action-btn cyclic-btn" data-value="${opciones[0].id}">${prefix}: <span>${opciones[0].nombre}</span></button>`;
 }
 
-
-// --- EXTRACCIÓN Y ACTUALIZACIÓN DE DATOS ---
-
 export function getParams() {
     const params = {
-        // Lee el atributo oculto 'data-value' de los botones cíclicos
         formaHoja: document.getElementById('p-forma').getAttribute('data-value'),
         tipoFlora: document.getElementById('p-flora').getAttribute('data-value'),
     };
@@ -122,7 +114,6 @@ function actualizarUI(id, valor) {
     let el = document.getElementById(id);
     if(!el) return;
     
-    // Si es un botón cíclico, actualiza su texto y su atributo interno
     if(el.classList.contains('cyclic-btn')) {
         let state = ESTADO_CICLICO[id];
         let newIndex = state.opciones.findIndex(o => o.id === valor);
@@ -132,7 +123,6 @@ function actualizarUI(id, valor) {
             el.innerHTML = `${state.prefix}: <span>${state.opciones[newIndex].nombre}</span>`;
         }
     } else {
-        // Si es un slider
         el.value = valor;
         el.dispatchEvent(new Event('input'));
     }
@@ -205,7 +195,6 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
 
 function arrancarAudioSilencioso() {
     if(!audioIniciado) {
-        // Configuramos la UI y el Motor en ON
         audioMotor.sfxEnabled = true;
         audioMotor.musicEnabled = true;
         
@@ -214,7 +203,6 @@ function arrancarAudioSilencioso() {
         document.getElementById('btn-music').classList.add('active-toggle');
         document.getElementById('btn-music').innerHTML = "🎵 MÚSICA: ON";
         
-        // Inicializamos los contextos seguros de audio
         audioMotor.initCtx();
         audioMotor.initWind();
         if(isZenMode) audioMotor.resumeMusic();
@@ -222,23 +210,60 @@ function arrancarAudioSilencioso() {
         audioIniciado = true;
     }
 }
-// Escucha cualquier interacción en la pantalla para destrabar el audio del navegador
-window.addEventListener('click', arrancarAudioSilencioso, { once: true });
-window.addEventListener('touchstart', arrancarAudioSilencioso, { once: true });
 
 
-// --- GESTIÓN DE INTERFAZ ---
+// --- GESTIÓN DE INTERACTIVIDAD (5 SEGUNDOS WAKE-UP) ---
 
 function resetTimerIdle() {
+    // Muestra los botones inmediatamente quitando 'zen-idle'
     document.body.classList.remove('zen-idle');
     clearTimeout(idleTimeout);
-    // Vuelve a ocultar la UI tras 2.5s sin mover el ratón
-    idleTimeout = setTimeout(() => { document.body.classList.add('zen-idle'); }, 2500);
+    // Vuelve a ocultarlos tras 5 segundos (5000ms) si está en modo zen
+    idleTimeout = setTimeout(() => { 
+        if (isZenMode) document.body.classList.add('zen-idle'); 
+    }, 5000);
 }
 
-document.getElementById('btn-open-config').addEventListener('click', () => dashboard.classList.add('open'));
-document.getElementById('btn-close-config').addEventListener('click', () => dashboard.classList.remove('open'));
+// Detectar movimiento en desktop y toques en móvil para despertar la UI
+window.addEventListener('mousemove', resetTimerIdle);
+window.addEventListener('touchstart', (e) => {
+    arrancarAudioSilencioso();
+    resetTimerIdle();
+});
+window.addEventListener('click', (e) => {
+    arrancarAudioSilencioso();
+    resetTimerIdle();
+});
+
+
+document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
+document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
 document.getElementById('btn-reset').addEventListener('click', inicializarArbol);
+
+
+// --- CONTROLES DE CRECIMIENTO INDEPENDIENTES ---
+
+const btnAuto = document.getElementById('btn-auto');
+
+document.getElementById('btn-step').addEventListener('click', () => {
+    if(arbolBase && iteracionGlobal <= 18) {
+        arbolBase.crecer(1.0, getParams());
+        iteracionGlobal += 1.0;
+        statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
+    }
+});
+
+btnAuto.addEventListener('click', (e) => {
+    isAutoGrowing = !isAutoGrowing;
+    if(isAutoGrowing) {
+        e.target.classList.add('active-toggle');
+        e.target.innerHTML = "Auto-Crecer: ON";
+    } else {
+        e.target.classList.remove('active-toggle');
+        e.target.innerHTML = "Auto-Crecer: OFF";
+    }
+});
+
 
 document.getElementById('btn-hojas').addEventListener('click', (e) => { 
     showLeaves = !showLeaves; 
@@ -266,23 +291,36 @@ document.getElementById('btn-fondo').addEventListener('click', (e) => {
     e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF";
 });
 
-btnZenMain.addEventListener('click', () => {
+// --- MODO ZEN ---
+btnZenMain.addEventListener('click', (e) => {
+    e.stopPropagation(); // Evita que el click se propague y reinicie los timers raramente
     isZenMode = !isZenMode;
     if (isZenMode) {
         document.body.classList.add('zen-active');
         btnZenMain.classList.add('active');
         zenPausa = false;
-        if (iteracionGlobal > 18) { document.getElementById('btn-mutar').click(); } 
+        
+        // En modo Zen, el crecimiento automático es implícito
+        isAutoGrowing = true;
+        btnAuto.classList.add('active-toggle');
+        btnAuto.innerHTML = "Auto-Crecer: ON";
+        
+        if (iteracionGlobal > 18) { 
+            document.getElementById('btn-mutar').click(); 
+        } 
         audioMotor.resumeMusic();
+        resetTimerIdle(); // Inicia la cuenta regresiva para ocultarse
+        
     } else {
         document.body.classList.remove('zen-active');
+        document.body.classList.remove('zen-idle'); // Fuerza a mostrar la UI
         btnZenMain.classList.remove('active');
         audioMotor.stopMusic();
     }
 });
 
 
-// --- CICLO DE VIDA DEL BONSÁI ---
+// --- CICLO DE ANIMACIÓN PRINCIPAL ---
 
 function bucleAnimacion() {
     tiempoViento += 0.016; 
@@ -290,15 +328,25 @@ function bucleAnimacion() {
     
     audioMotor.actualizarViento(tiempoViento, paramsActuales.viento * 100);
 
-    if (isZenMode && !zenPausa && arbolBase) {
+    // Crecimiento continuo si estamos en Zen o si el Auto-Crecer está activo
+    if ((isZenMode || isAutoGrowing) && !zenPausa && arbolBase) {
         let deltaZen = 0.015; 
         arbolBase.crecer(deltaZen, paramsActuales);
         iteracionGlobal += deltaZen;
         statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
 
+        // Límite de edad alcanzado
         if (iteracionGlobal > 18) {
             zenPausa = true;
-            setTimeout(() => { if(isZenMode) { document.getElementById('btn-mutar').click(); } }, 4000); 
+            if(isZenMode) {
+                // En Zen muta infinitamente
+                setTimeout(() => { if(isZenMode) { document.getElementById('btn-mutar').click(); } }, 4000); 
+            } else {
+                // Fuera del Zen, simplemente se detiene
+                isAutoGrowing = false;
+                btnAuto.classList.remove('active-toggle');
+                btnAuto.innerHTML = "Auto-Crecer: OFF";
+            }
         }
     }
 
@@ -333,7 +381,14 @@ window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     window.aplicarPreset('pino'); 
     
+    // Iniciamos la simulación en Zen por defecto
     isZenMode = true;
     document.body.classList.add('zen-active');
     btnZenMain.classList.add('active');
+    
+    isAutoGrowing = true;
+    btnAuto.classList.add('active-toggle');
+    btnAuto.innerHTML = "Auto-Crecer: ON";
+    
+    resetTimerIdle();
 });

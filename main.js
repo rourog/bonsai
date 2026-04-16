@@ -575,23 +575,46 @@ window.addEventListener('click', () => {
     resetTimerIdle();
 });
 
-document.getElementById('btn-open-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
-document.getElementById('btn-close-config').addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
+// --- EVENT LISTENERS BLINDADOS (SEGURIDAD CONTRA HTML CAMBIANTE) ---
 
-document.getElementById('btn-reset').addEventListener('click', () => {
+const btnOpenConfig = document.getElementById('btn-open-config');
+if(btnOpenConfig) btnOpenConfig.addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
+
+const btnCloseConfig = document.getElementById('btn-close-config');
+if(btnCloseConfig) btnCloseConfig.addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
+
+const btnReset = document.getElementById('btn-reset');
+if(btnReset) btnReset.addEventListener('click', () => {
     if(isDying) return;
     iniciarMuerte(inicializarArbol);
 });
 
-document.getElementById('btn-step').addEventListener('click', () => {
-    if(arbolBase && iteracionGlobal <= 18) {
-        arbolBase.crecer(1.0, getParams());
-        iteracionGlobal += 1.0;
-        statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
-    }
-});
+// NUEVO: Lógica del botón Paso a Paso (+1 AÑO)
+const btnStep = document.getElementById('btn-step');
+if(btnStep) {
+    btnStep.addEventListener('click', () => {
+        if(isDying) return;
 
-btnAuto.addEventListener('click', (e) => {
+        if(isAutoGrowing) {
+            isAutoGrowing = false;
+            const btnAuto = document.getElementById('btn-auto');
+            if(btnAuto) {
+                btnAuto.classList.remove('active-toggle');
+                btnAuto.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF';
+            }
+        }
+
+        if(arbolBase && iteracionGlobal <= 18) {
+            arbolBase.crecer(1.0, getParams());
+            iteracionGlobal += 1.0;
+            statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
+            // Forzar renderizado visual inmediato
+            arbolBase.animarYRenderizar(0, tiempoViento, getParams().viento, showLeaves, showFlowers);
+        }
+    });
+}
+
+if(btnAuto) btnAuto.addEventListener('click', (e) => {
     isAutoGrowing = !isAutoGrowing;
     if(isAutoGrowing) {
         e.currentTarget.classList.add('active-toggle');
@@ -602,39 +625,46 @@ btnAuto.addEventListener('click', (e) => {
     }
 });
 
-document.getElementById('btn-hojas').addEventListener('click', (e) => { 
+const btnHojas = document.getElementById('btn-hojas');
+if(btnHojas) btnHojas.addEventListener('click', (e) => { 
     showLeaves = !showLeaves; 
     e.currentTarget.classList.toggle('active-toggle', showLeaves); 
     guardarAjustes();
 });
-document.getElementById('btn-flores').addEventListener('click', (e) => { 
+
+const btnFlores = document.getElementById('btn-flores');
+if(btnFlores) btnFlores.addEventListener('click', (e) => { 
     showFlowers = !showFlowers; 
     e.currentTarget.classList.toggle('active-toggle', showFlowers); 
     guardarAjustes();
 });
 
-document.getElementById('btn-sfx').addEventListener('click', (e) => { 
+const btnSfx = document.getElementById('btn-sfx');
+if(btnSfx) btnSfx.addEventListener('click', (e) => { 
     const activado = audioMotor.toggleSfx(); 
     e.currentTarget.classList.toggle('active-toggle', activado); 
     e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">volume_up</span> SFX: ON' : '<span class="material-symbols-rounded">volume_off</span> SFX: OFF'; 
     guardarAjustes();
 });
 
-document.getElementById('btn-music').addEventListener('click', (e) => { 
+const btnMusic = document.getElementById('btn-music');
+if(btnMusic) btnMusic.addEventListener('click', (e) => { 
     const activado = audioMotor.toggleMusic(); 
     e.currentTarget.classList.toggle('active-toggle', activado); 
     e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">music_note</span> MÚSICA: ON' : '<span class="material-symbols-rounded">music_off</span> MÚSICA: OFF'; 
     guardarAjustes();
 });
 
-document.getElementById('btn-fondo').addEventListener('click', (e) => { 
+const btnFondo = document.getElementById('btn-fondo');
+if(btnFondo) btnFondo.addEventListener('click', (e) => { 
     const activado = entornoMotor.toggleSky(); 
     e.currentTarget.classList.toggle('active-toggle', activado); 
     e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">landscape</span> CIELO: ON' : '<span class="material-symbols-rounded">image</span> CIELO: OFF'; 
     guardarAjustes();
 });
 
-document.getElementById('btn-mutar').addEventListener('click', () => {
+const btnMutar = document.getElementById('btn-mutar');
+if(btnMutar) btnMutar.addEventListener('click', () => {
     if (isDying) return;
     
     iniciarMuerte(() => {
@@ -668,7 +698,7 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
     });
 });
 
-btnZenMain.addEventListener('click', (e) => {
+if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
     e.stopPropagation(); 
     isZenMode = !isZenMode;
     if (isZenMode) {
@@ -677,10 +707,12 @@ btnZenMain.addEventListener('click', (e) => {
         zenPausa = false;
         
         isAutoGrowing = true;
-        btnAuto.classList.add('active-toggle');
-        btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
+        if(btnAuto) {
+            btnAuto.classList.add('active-toggle');
+            btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
+        }
         
-        if (iteracionGlobal > 18) { document.getElementById('btn-mutar').click(); } 
+        if (iteracionGlobal > 18) { if(btnMutar) btnMutar.click(); } 
         if (audioIniciado) audioMotor.resumeMusic();
         
         solicitarWakeLock();
@@ -746,11 +778,13 @@ function bucleAnimacion() {
         if (iteracionGlobal > 18) {
             zenPausa = true;
             if(isZenMode) {
-                setTimeout(() => { if(isZenMode) document.getElementById('btn-mutar').click(); }, 2000); 
+                setTimeout(() => { if(isZenMode && btnMutar) btnMutar.click(); }, 2000); 
             } else {
                 isAutoGrowing = false;
-                btnAuto.classList.remove('active-toggle');
-                btnAuto.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF';
+                if(btnAuto) {
+                    btnAuto.classList.remove('active-toggle');
+                    btnAuto.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF';
+                }
             }
         }
     }
@@ -800,7 +834,6 @@ function inicializarArbol() {
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     
-    // 1. Verificamos si hay una semilla forzada en la URL
     const urlParams = new URLSearchParams(window.location.search);
     const semillaURL = urlParams.get('seed');
     let inputSemilla = document.getElementById('input-semilla');
@@ -818,26 +851,26 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 2. Cargamos ajustes guardados. Si no hay, aplicamos el preset 'pino'
     const datosCargados = cargarAjustes();
     if (!datosCargados) {
         window.aplicarPreset('pino'); 
     } else {
-        // Si cargó datos, hay que detonar inicializarArbol manualmente porque no lo hicimos por preset
         inicializarArbol();
     }
     
     isZenMode = true;
     document.body.classList.add('zen-active');
-    btnZenMain.classList.add('active');
+    if(btnZenMain) btnZenMain.classList.add('active');
     
     isAutoGrowing = true;
-    btnAuto.classList.add('active-toggle');
-    btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
+    if(btnAuto) {
+        btnAuto.classList.add('active-toggle');
+        btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
+    }
 
     let btnFondo = document.getElementById('btn-fondo');
     if (btnFondo && !btnFondo.classList.contains('active-toggle')) {
-        btnFondo.click(); // Esto también gatillará un guardarAjustes internamente
+        btnFondo.click(); 
     }
     
     solicitarWakeLock();

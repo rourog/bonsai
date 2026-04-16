@@ -4,7 +4,6 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 export const DICCIONARIO_ENTORNO = {
     macetas: [
-        // NUEVO: Agregamos baseY (la coordenada Y del fondo exacto de cada maceta)
         { id: 'estandar', nombre: 'Rectangular', baseY: 39 },
         { id: 'redonda', nombre: 'Tazón Suave', baseY: 34 },
         { id: 'alta', nombre: 'Alta Cascada', baseY: 74 },
@@ -31,7 +30,7 @@ export class MotorEntorno {
         this.ctx = ctx; 
         this.skyEnabled = false;
         this.skyContainer = document.getElementById('sky-bg');
-        this.macetaActual = DICCIONARIO_ENTORNO.macetas[0]; // Inicialización por defecto
+        this.macetaActual = DICCIONARIO_ENTORNO.macetas[0];
         
         this.inyectarEstilosAtmosfericos();
         this.construirCielo();
@@ -39,12 +38,10 @@ export class MotorEntorno {
     }
 
     renderizarMaceta(formaId, color) {
-        // Encontramos la maceta actual para saber su profundidad (baseY)
         const forma = DICCIONARIO_ENTORNO.macetas.find(m => m.id === formaId) || DICCIONARIO_ENTORNO.macetas[0];
         this.macetaActual = forma;
 
         let svg = '';
-        // Las macetas ahora son sólidas. La sombra se dibuja encima para dar volumen sin transparencia.
         switch(forma.id) {
             case 'estandar':
                 svg = `<rect x="-45" y="0" width="90" height="18" fill="${color}" rx="2"/>
@@ -81,7 +78,6 @@ export class MotorEntorno {
         }
         this.ctx.layerPot.innerHTML = svg;
         
-        // REGENERAMOS EL SUELO PARA QUE SE ANCLE A LA NUEVA BASE
         this.generarSuelo();
     }
 
@@ -95,23 +91,19 @@ export class MotorEntorno {
         if (!this.domPastoFrente) {
             this.domPastoFrente = document.createElementNS(SVG_NS, "g");
             this.domPastoFrente.setAttribute("id", "capa-pasto-frente");
-            // Se inserta DESPUÉS de la maceta, pero ANTES del árbol
             this.ctx.layerPot.parentNode.insertBefore(this.domPastoFrente, this.ctx.layerTree);
         }
 
-        // Extraemos la altura dinámica de la maceta actual
         const baseY = this.macetaActual.baseY;
 
-        // Curva dramática de colina. El vértice central es exactamente baseY
         let html = `<path class="colina-base" d="M -1500 ${baseY + 200} Q 0 ${baseY - 200} 1500 ${baseY + 200} L 1500 600 L -1500 600 Z" />`;
         
         let bladesHtml = '';
 
-        // Generamos el pasto trasero a lo largo de toda la colina (300 briznas)
+        // Pasto Trasero (Densidad normal)
         for (let i = 0; i < 300; i++) {
             let x = (Math.random() - 0.5) * 3000; 
             
-            // Ecuación matemática exacta de la Curva Bézier Quadrática para anclar el pasto a la tierra
             let t = (x + 1500) / 3000; 
             let curveY = (baseY + 200)*Math.pow(1-t, 2) + 2*(baseY - 200)*(1-t)*t + (baseY + 200)*Math.pow(t, 2);
             
@@ -131,20 +123,19 @@ export class MotorEntorno {
         }
         this.domGround.innerHTML = html + bladesHtml;
 
-        // GENERAR PASTO FONTAL (Tapa exclusivamente la base de la maceta)
+        // GENERAR PASTO FRONTAL (Ajustado para integrarse perfectamente con el fondo)
         let htmlFrente = '';
-        for (let i = 0; i < 40; i++) {
-            // Concentrado alrededor de la maceta
+        // Reducido a 18 briznas para que la densidad sea igual a la del resto de la colina
+        for (let i = 0; i < 18; i++) {
             let x = (Math.random() - 0.5) * 160; 
+            let y = baseY + (Math.random() * 18); // Se asienta ligeramente bajo la maceta
             
-            // REGLA ABSOLUTA: El pasto frontal NACE en baseY o más abajo. Nunca encima de la maceta.
-            let y = baseY + (Math.random() * 25); 
-            
-            let perspectiva = 1.8; // Muy grande por estar frente a la cámara
-            let altura = (10 + Math.random() * 12) * perspectiva;
-            let grosor = (2 + Math.random() * 1.5) * perspectiva;
+            let perspectiva = 1.6; 
+            // Usamos exactamente la misma fórmula de altura que el pasto de fondo para no desentonar
+            let altura = (8 + Math.random() * 12) * perspectiva;
+            let grosor = (1.5 + Math.random() * 2) * perspectiva;
             let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
-            let inclinacionIni = Math.random() * 20 - 10; 
+            let inclinacionIni = Math.random() * 16 - 8; // Misma inclinación natural
 
             let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
             

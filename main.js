@@ -63,17 +63,15 @@ function guardarAjustes() {
 
 function cargarAjustes() {
     const saved = localStorage.getItem('bonsai_zen_prefs');
-    if(!saved) return false; // No hay datos previos
+    if(!saved) return false; 
     
     try {
         const state = JSON.parse(saved);
         
-        // Restaurar UI
         for(let id in state.ui) {
-            actualizarUI(id, state.ui[id], false); // Falso para no detonar un guardado en bucle
+            actualizarUI(id, state.ui[id], false); 
         }
         
-        // Restaurar Toggles
         if (state.toggles) {
             showLeaves = state.toggles.showLeaves !== undefined ? state.toggles.showLeaves : true;
             showFlowers = state.toggles.showFlowers !== undefined ? state.toggles.showFlowers : true;
@@ -84,7 +82,6 @@ function cargarAjustes() {
             if(btnFlores) btnFlores.classList.toggle('active-toggle', showFlowers);
         }
 
-        // Restaurar Semilla (Solo si no hay una en la URL)
         const urlParams = new URLSearchParams(window.location.search);
         if (!urlParams.get('seed') && state.seed) {
             const inputSemilla = document.getElementById('input-semilla');
@@ -139,7 +136,7 @@ function construirInterfaz() {
                 e.currentTarget.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
                 
                 if(id.startsWith('p-maceta')) updatePot();
-                guardarAjustes(); // Guardar al hacer clic
+                guardarAjustes(); 
             });
         }
     });
@@ -152,11 +149,9 @@ function construirInterfaz() {
             document.getElementById(`val-${e.target.id}`).textContent = val;
         });
         
-        // Guardar cuando se suelta el slider para no saturar el LocalStorage
         input.addEventListener('change', () => { guardarAjustes(); });
     });
     
-    // Escuchar cambios directos en el input de la semilla
     const inputSemilla = document.getElementById('input-semilla');
     if(inputSemilla) {
         inputSemilla.addEventListener('change', () => { guardarAjustes(); });
@@ -557,6 +552,7 @@ function arrancarAudioSilencioso() {
     }
 }
 
+// --- FILTRO DE EVENTOS (IGNORAR CLICS AUTOMÁTICOS) ---
 function resetTimerIdle() {
     document.body.classList.remove('zen-idle');
     clearTimeout(idleTimeout);
@@ -565,17 +561,24 @@ function resetTimerIdle() {
     }, 5000);
 }
 
-window.addEventListener('mousemove', resetTimerIdle);
-window.addEventListener('touchstart', () => {
+window.addEventListener('mousemove', (e) => {
+    if (!e.isTrusted) return; 
+    resetTimerIdle();
+});
+
+window.addEventListener('touchstart', (e) => {
+    if (!e.isTrusted) return; // Ignoramos si viene de un script
     arrancarAudioSilencioso();
     resetTimerIdle();
 }, { passive: true });
-window.addEventListener('click', () => {
+
+window.addEventListener('click', (e) => {
+    if (!e.isTrusted) return; // Ignoramos clics de mutación
     arrancarAudioSilencioso();
     resetTimerIdle();
 });
 
-// --- EVENT LISTENERS BLINDADOS (SEGURIDAD CONTRA HTML CAMBIANTE) ---
+// --- EVENT LISTENERS BLINDADOS ---
 
 const btnOpenConfig = document.getElementById('btn-open-config');
 if(btnOpenConfig) btnOpenConfig.addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
@@ -589,7 +592,6 @@ if(btnReset) btnReset.addEventListener('click', () => {
     iniciarMuerte(inicializarArbol);
 });
 
-// Lógica del botón Paso a Paso (+1 AÑO)
 const btnStep = document.getElementById('btn-step');
 if(btnStep) {
     btnStep.addEventListener('click', () => {
@@ -608,7 +610,6 @@ if(btnStep) {
             arbolBase.crecer(1.0, getParams());
             iteracionGlobal += 1.0;
             statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
-            // Forzar renderizado visual inmediato
             arbolBase.animarYRenderizar(0, tiempoViento, getParams().viento, showLeaves, showFlowers);
         }
     });
@@ -639,25 +640,21 @@ if(btnFlores) btnFlores.addEventListener('click', (e) => {
     guardarAjustes();
 });
 
-
-// --- SINCRONIZADOR VISUAL DE BOTONES (PANEL VS ACCESOS RÁPIDOS) ---
+// --- SINCRONIZADOR VISUAL DE BOTONES ---
 function syncUI(idPanel, idQuick, activado, iconOn, iconOff, textOn, textOff) {
     const btnPanel = document.getElementById(idPanel);
     const btnQuick = document.getElementById(idQuick);
     
-    // Actualizar botón del menú grande (con texto)
     if (btnPanel) {
         btnPanel.classList.toggle('active-toggle', activado);
         btnPanel.innerHTML = `<span class="material-symbols-rounded">${activado ? iconOn : iconOff}</span> ${activado ? textOn : textOff}`;
     }
-    // Actualizar botón flotante rápido (solo icono)
     if (btnQuick) {
         btnQuick.classList.toggle('active', activado);
         btnQuick.innerHTML = `<span class="material-symbols-rounded">${activado ? iconOn : iconOff}</span>`;
     }
 }
 
-// Controladores Maestros
 const toggleFondo = () => {
     const activado = entornoMotor.toggleSky();
     syncUI('btn-fondo', 'btn-fondo-quick', activado, 'landscape', 'image', 'CIELO: ON', 'CIELO: OFF');
@@ -676,24 +673,20 @@ const toggleSfx = () => {
     guardarAjustes();
 };
 
-// Enchufar los clics a ambos botones (Fondo)
 const btnFondo = document.getElementById('btn-fondo');
 const btnFondoQuick = document.getElementById('btn-fondo-quick');
 if (btnFondo) btnFondo.addEventListener('click', toggleFondo);
 if (btnFondoQuick) btnFondoQuick.addEventListener('click', toggleFondo);
 
-// Enchufar los clics a ambos botones (Música)
 const btnMusic = document.getElementById('btn-music');
 const btnMusicQuick = document.getElementById('btn-music-quick');
 if (btnMusic) btnMusic.addEventListener('click', toggleMusic);
 if (btnMusicQuick) btnMusicQuick.addEventListener('click', toggleMusic);
 
-// Enchufar los clics a ambos botones (SFX)
 const btnSfx = document.getElementById('btn-sfx');
 const btnSfxQuick = document.getElementById('btn-sfx-quick');
 if (btnSfx) btnSfx.addEventListener('click', toggleSfx);
 if (btnSfxQuick) btnSfxQuick.addEventListener('click', toggleSfx);
-
 
 const btnMutar = document.getElementById('btn-mutar');
 if(btnMutar) btnMutar.addEventListener('click', () => {
@@ -731,8 +724,10 @@ if(btnMutar) btnMutar.addEventListener('click', () => {
 });
 
 if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
+    if (!e.isTrusted) return; // Protección extra
     e.stopPropagation(); 
     isZenMode = !isZenMode;
+    
     if (isZenMode) {
         document.body.classList.add('zen-active');
         btnZenMain.classList.add('active');
@@ -890,8 +885,10 @@ window.addEventListener('DOMContentLoaded', () => {
         inicializarArbol();
     }
     
+    // Arranque inmersivo automático
     isZenMode = true;
     document.body.classList.add('zen-active');
+    document.body.classList.add('zen-idle'); // <--- Inicia oculto, esperando actividad humana
     if(btnZenMain) btnZenMain.classList.add('active');
     
     isAutoGrowing = true;
@@ -900,12 +897,10 @@ window.addEventListener('DOMContentLoaded', () => {
         btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
     }
 
-    // Encendemos el cielo por defecto usando el nuevo controlador sincronizado
     const btnFondoMenu = document.getElementById('btn-fondo');
     if (btnFondoMenu && !btnFondoMenu.classList.contains('active-toggle')) {
         toggleFondo(); 
     }
     
     solicitarWakeLock();
-    resetTimerIdle();
 });

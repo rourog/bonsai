@@ -795,7 +795,7 @@ function bucleAnimacion() {
     let paramsActuales = getParams();
     
     audioMotor.actualizarViento(tiempoViento, paramsActuales.viento * 100);
-
+    entornoMotor.animarPasto(tiempoViento, paramsActuales.viento);
     if ((isZenMode || isAutoGrowing) && !zenPausa && arbolBase) {
         let deltaZen = 0.015; 
         arbolBase.crecer(deltaZen, paramsActuales);

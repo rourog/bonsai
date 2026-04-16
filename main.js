@@ -1,8 +1,10 @@
 // main.js
 
-import { MotorAudio } from './MotorAudio.js';
-import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js';
-import { Rama, rnd, setSeed, seededRandom, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
+// ¡LA SOLUCIÓN! Añadimos un parámetro de versión (?v=25) a las importaciones 
+// para obligar al Service Worker y a GitHub Pages a descargar el código nuevo.
+import { MotorAudio } from './MotorAudio.js?v=25';
+import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js?v=25';
+import { Rama, rnd, setSeed, seededRandom, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js?v=25';
 
 const domContext = {
     layerPot: document.getElementById('layer-pot'),
@@ -209,7 +211,6 @@ function ejecutarMutacion() {
     if (isDying) return;
     
     iniciarMuerte(() => {
-        // Aleatorización pura para máxima variabilidad paramétrica
         const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
         const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
         const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
@@ -805,7 +806,6 @@ function bucleAnimacion() {
         iteracionGlobal += 0.015;
         statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
 
-        // MUERTE POR MADUREZ BIOLÓGICA (Reemplaza el límite estricto de 18)
         const maduro = arbolBase.verificarMadurez(p.maxGen);
         
         if (!muerteProgramada && ((iteracionGlobal >= 15 && maduro) || iteracionGlobal >= 30)) {
@@ -895,7 +895,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     inicializarArbol();
     
-    // Auto-activar Modo Zen al iniciar
     isZenMode = true; 
     if (btnZenMain) btnZenMain.classList.add('active'); 
     document.body.classList.add('zen-active', 'zen-idle');

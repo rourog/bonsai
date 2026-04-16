@@ -21,31 +21,28 @@ export class MotorAudio {
 
         this.chimeNotes = [1200, 1500, 1800, 2100, 2600, 3200];
         
-        // --- Variables del Sintetizador Musical Zen ---
-        this.musicMaster = null;
-        this.musicDry = null;
-        this.musicReverbSend = null;
-        this.musicCompressor = null;
-        this.musicReverb = null;
-
-        this.rootHz = 220.0; 
-        this.scaleRatios = [1, 9/8, 5/4, 3/2, 5/3]; 
-        this.registerMultipliers = [0.5, 1, 2];
-        this.currentDegree = 0;
-        this.currentRegister = 1;
-
-        this.sessionMood = { activity: 0.35, brightness: 0.28, ghostVoiceChance: 0.22, phraseNoteMin: 1, phraseNoteMax: 3 };
-        this.lastPhraseEndedAt = 0;
+        // --- Motor Musical Minimalista ---
+        this.masterMusic = null;
+        this.rootHz = 220.0; // Tonalidad base (A3)
+        // Escala Pentatónica (Siempre suena armónica y relajante)
+        this.scaleRatios = [1, 9/8, 5/4, 3/2, 5/3, 2, 9/4]; 
     }
 
     initCtx() {
         if (!this.audioCtx) {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Canal de SFX
             this.masterGainSFX = this.audioCtx.createGain();
             this.masterGainSFX.connect(this.audioCtx.destination);
             this.masterGainSFX.gain.value = 0.5;
+            
+            // Canal de Música
+            this.masterMusic = this.audioCtx.createGain();
+            this.masterMusic.connect(this.audioCtx.destination);
+            this.masterMusic.gain.value = 0.6; // Volumen general de la música
+
             this.crearRuidoBlanco(); 
-            this.initZenMusicEngine(); 
         }
         if (this.audioCtx.state === 'suspended') {
             this.audioCtx.resume();
@@ -149,6 +146,8 @@ export class MotorAudio {
         } catch(e) {}
     }
 
+    // --- EFECTOS DE SONIDO OPTIMIZADOS ---
+
     ecosistemaAmbiental = () => {
         if (!this.sfxEnabled || !this.audioCtx) return;
         const dado = Math.random();
@@ -180,7 +179,6 @@ export class MotorAudio {
             const t = tiempoActual + (i * 0.06); 
             gain.gain.setValueAtTime(0, t);
             
-            // Volumen reducido al 12% (0.12)
             gain.gain.linearRampToValueAtTime(0.12, t + 0.005); 
             gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); 
             
@@ -206,7 +204,6 @@ export class MotorAudio {
     playPezSplash(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
         
-        // Bloop líquido y orgánico
         const osc = this.audioCtx.createOscillator();
         const gainBloop = this.audioCtx.createGain();
         osc.type = 'sine'; 
@@ -217,7 +214,6 @@ export class MotorAudio {
         gainBloop.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.25);
         osc.connect(gainBloop).connect(this.masterGainSFX);
 
-        // Swish agudo para la espuma
         const noise = this.crearFuenteRuido();
         const filtroNoise = this.audioCtx.createBiquadFilter();
         filtroNoise.type = 'bandpass'; 
@@ -270,8 +266,6 @@ export class MotorAudio {
             filter.Q.value = 2;
             
             gain.gain.setValueAtTime(0, time);
-            
-            // Volumen reducido drásticamente al 8% (0.08)
             gain.gain.linearRampToValueAtTime(0.08, time + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
             
@@ -282,7 +276,7 @@ export class MotorAudio {
     }
 
     playPop() {
-        if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
+        if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         if (this.audioCtx.currentTime - this.lastPopTime < 0.1) return;
         this.lastPopTime = this.audioCtx.currentTime;
 
@@ -307,7 +301,7 @@ export class MotorAudio {
 
 
     // ==========================================
-    // SECCIÓN 2: MOTOR MUSICAL GENERATIVO (ZEN)
+    // SECCIÓN 2: MOTOR MUSICAL GENERATIVO LIGERO
     // ==========================================
 
     toggleMusic() {
@@ -321,227 +315,87 @@ export class MotorAudio {
         return this.musicEnabled;
     }
 
-    resumeMusic() {
-        if (this.musicEnabled && this.audioCtx && this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume();
-        }
-    }
-
-    initZenMusicEngine() {
-        if (this.musicMaster) return; 
-
-        this.musicMaster = this.audioCtx.createGain();
-        this.musicMaster.gain.value = 0.0;
-
-        this.musicDry = this.audioCtx.createGain();
-        this.musicDry.gain.value = 0.75;
-
-        this.musicReverbSend = this.audioCtx.createGain();
-        this.musicReverbSend.gain.value = 0.35;
-
-        this.musicCompressor = this.audioCtx.createDynamicsCompressor();
-        this.musicCompressor.threshold.value = -26;
-        this.musicCompressor.knee.value = 18;
-        this.musicCompressor.ratio.value = 2.2;
-        this.musicCompressor.attack.value = 0.02;
-        this.musicCompressor.release.value = 0.45;
-
-        this.musicReverb = this.audioCtx.createConvolver();
-        this.musicReverb.buffer = this._createImpulseResponse(3.2, 2.2);
-
-        this.musicDry.connect(this.musicMaster);
-        this.musicReverbSend.connect(this.musicReverb).connect(this.musicMaster);
-        this.musicMaster.connect(this.musicCompressor).connect(this.audioCtx.destination);
-    }
-
-    _createImpulseResponse(seconds, decay) {
-        const rate = this.audioCtx.sampleRate;
-        const length = Math.floor(rate * seconds);
-        const impulse = this.audioCtx.createBuffer(2, length, rate);
-        for (let ch = 0; ch < 2; ch++) {
-            const data = impulse.getChannelData(ch);
-            for (let i = 0; i < length; i++) {
-                const t = i / length;
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
-            }
-        }
-        return impulse;
-    }
-
     reseedMusicEngine(seedString) {
+        // La semilla define la tonalidad del árbol
         let num = 0;
         for (let i = 0; i < seedString.length; i++) num += seedString.charCodeAt(i);
+        // Tonalidades relajantes (G3, A3, C4, D4)
         const possibleRoots = [196.00, 220.00, 261.63, 293.66]; 
         this.rootHz = possibleRoots[num % possibleRoots.length];
-        this._randomizeSessionIdentity();
     }
 
-    _randomizeSessionIdentity() {
-        this.sessionMood.activity = 0.22 + Math.random() * 0.22;       
-        this.sessionMood.brightness = 0.18 + Math.random() * 0.18;     
-        this.sessionMood.ghostVoiceChance = 0.14 + Math.random() * 0.18;
-        this.sessionMood.phraseNoteMax = Math.random() > 0.5 ? 2 : 3;
-        this.currentDegree = 0;
-        this.currentRegister = Math.random() > 0.7 ? 0 : 1;
-    }
-
-    _degreeToFreq(degree, register = 1) {
-        const safeDegree = ((degree % this.scaleRatios.length) + this.scaleRatios.length) % this.scaleRatios.length;
-        const ratio = this.scaleRatios[safeDegree];
-        const reg = this.registerMultipliers[Math.max(0, Math.min(register, this.registerMultipliers.length - 1))];
-        return this.rootHz * ratio * reg;
-    }
-
-    _weightedNextDegree() {
-        const candidates = [
-            { d: this.currentDegree, w: 0.38 }, { d: this.currentDegree - 1, w: 0.22 }, { d: this.currentDegree + 1, w: 0.22 },         
-            { d: this.currentDegree - 2, w: 0.08 }, { d: this.currentDegree + 2, w: 0.08 }, { d: 0, w: 0.18 }                               
-        ];
-        const total = candidates.reduce((s, c) => s + c.w, 0);
-        let roll = Math.random() * total;
-        for (const c of candidates) { roll -= c.w; if (roll <= 0) return c.d; }
-        return this.currentDegree;
-    }
-
-    _maybeShiftRegister() {
-        const r = Math.random();
-        if (r < 0.80) return this.currentRegister;
-        if (r < 0.90) return Math.max(0, this.currentRegister - 1);
-        return Math.min(2, this.currentRegister + 1);
-    }
-
-    _scheduleNote({ time, freq, duration = 6, peak = 0.35, type = 'sine', brightness = 0.24, vibratoAmount = 2.5, vibratoRate = 0.12, reverbSendBoost = 1.0 }) {
-        if (!this.audioCtx || this.audioCtx.state === 'suspended') return;
+    // Toca una nota pura con un eco simulado muy largo
+    _playZenNote(time) {
+        if (!this.audioCtx || this.audioCtx.state !== 'running') return;
+        
         try {
             const osc = this.audioCtx.createOscillator();
-            const amp = this.audioCtx.createGain();
-            const filter = this.audioCtx.createBiquadFilter();
-
-            osc.type = type;
-            filter.type = 'lowpass';
-            filter.frequency.value = 700 + brightness * 2200; 
-            filter.Q.value = 0.35;
-            amp.gain.value = 0;
-
-            osc.connect(filter).connect(amp);
-            amp.connect(this.musicDry);
-            amp.connect(this.musicReverbSend);
-
-            const lfo = this.audioCtx.createOscillator();
-            const lfoGain = this.audioCtx.createGain();
-            lfo.type = 'sine';
-            lfo.frequency.value = vibratoRate;
-            lfoGain.gain.value = vibratoAmount;
-            lfo.connect(lfoGain).connect(osc.frequency);
-
-            osc.frequency.setValueAtTime(freq, time);
-
-            amp.gain.setValueAtTime(0.0001, time);
-            amp.gain.linearRampToValueAtTime(peak, time + Math.min(2.2, duration * 0.35));
-            amp.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-
-            const baseCutoff = 700 + brightness * 2200;
-            filter.frequency.setValueAtTime(baseCutoff, time);
-            filter.frequency.linearRampToValueAtTime(baseCutoff * 1.08, time + duration * 0.2);
-            filter.frequency.linearRampToValueAtTime(baseCutoff * 0.92, time + duration);
-
-            const originalSend = this.musicReverbSend.gain.value;
-            this.musicReverbSend.gain.setValueAtTime(originalSend * reverbSendBoost, time);
-
-            osc.start(time); lfo.start(time);
-            osc.stop(time + duration + 0.1); lfo.stop(time + duration + 0.1);
-
-            osc.onended = () => { try { osc.disconnect(); filter.disconnect(); amp.disconnect(); lfo.disconnect(); lfoGain.disconnect(); } catch(e){} };
+            const gain = this.audioCtx.createGain();
+            
+            osc.connect(gain).connect(this.masterMusic);
+            
+            // Selección aleatoria dentro de la escala pentatónica
+            const ratio = this.scaleRatios[Math.floor(Math.random() * this.scaleRatios.length)];
+            // Ocasionalmente subimos o bajamos una octava
+            const multiplier = Math.random() > 0.8 ? 0.5 : (Math.random() > 0.8 ? 2 : 1);
+            
+            osc.type = 'sine'; // Onda pura, cero coste de CPU
+            osc.frequency.value = this.rootHz * ratio * multiplier;
+            
+            // Simulación de "Cuenco" o "Campana" (Ataque suave, caída larguísima)
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.15, time + 0.5); // Sube suavemente
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 6.0); // Eco de 6 segundos
+            
+            osc.start(time);
+            osc.stop(time + 6.5);
+            
+            // Limpieza inmediata al terminar el eco
+            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
         } catch(e) {}
-    }
-
-    _scheduleGhostVoice({ time, baseFreq, duration }) {
-        const intervalChoices = [1, 3 / 2, 2]; 
-        const ratio = intervalChoices[Math.floor(Math.random() * intervalChoices.length)];
-        const ghostFreq = baseFreq * ratio;
-
-        this._scheduleNote({
-            time: time + 0.8 + Math.random() * 1.2, freq: ghostFreq,
-            duration: duration * (0.7 + Math.random() * 0.5),
-            peak: 0.12, type: 'triangle', brightness: this.sessionMood.brightness * 0.9,
-            vibratoAmount: 1.2, vibratoRate: 0.08, reverbSendBoost: 1.25
-        });
-    }
-
-    _schedulePhrase(startTime) {
-        const noteCount = Math.floor(Math.random() * (this.sessionMood.phraseNoteMax - this.sessionMood.phraseNoteMin + 1)) + this.sessionMood.phraseNoteMin;
-        let t = startTime;
-        let firstFreq = null; let lastFreq = null;
-
-        for (let i = 0; i < noteCount; i++) {
-            this.currentDegree = this._weightedNextDegree();
-            this.currentRegister = this._maybeShiftRegister();
-            if (Math.random() < 0.20) { this.currentDegree = 0; if (Math.random() < 0.8) this.currentRegister = 1; }
-
-            const freq = this._degreeToFreq(this.currentDegree, this.currentRegister);
-            const duration = 4.8 + Math.random() * 4.5;
-            const peak = 0.25 + Math.random() * 0.15; 
-            const type = Math.random() < 0.85 ? 'sine' : 'triangle';
-
-            this._scheduleNote({ time: t, freq, duration, peak, type, brightness: this.sessionMood.brightness, vibratoAmount: 1.5 + Math.random() * 1.8, vibratoRate: 0.07 + Math.random() * 0.08, reverbSendBoost: 1.0 + Math.random() * 0.2 });
-
-            if (firstFreq == null) firstFreq = freq;
-            lastFreq = freq;
-            t += 2.2 + Math.random() * 3.8;
-        }
-
-        if (Math.random() < this.sessionMood.ghostVoiceChance && firstFreq) {
-            this._scheduleGhostVoice({ time: startTime, baseFreq: Math.random() < 0.5 ? firstFreq : lastFreq, duration: 5 + Math.random() * 3 });
-        }
-
-        const phraseDuration = t - startTime;
-        const silence = (6 + Math.random() * 10) + (noteCount > 1 ? (noteCount - 1) * (2 + Math.random() * 2) : 0);
-        this.lastPhraseEndedAt = startTime + phraseDuration + silence;
-
-        return this.lastPhraseEndedAt;
     }
 
     _zenLoop = () => {
         if (!this.musicEnabled) return;
         
         if (this.audioCtx.state === 'suspended') {
-            this.zenTimeoutId = setTimeout(this._zenLoop, 500);
+            this.zenTimeoutId = setTimeout(this._zenLoop, 1000);
             return;
         }
 
-        try {
-            const now = this.audioCtx.currentTime;
-            const start = Math.max(now + 0.05, this.lastPhraseEndedAt || now + 0.05);
-
-            const drift = (v, amt, min, max) => Math.max(min, Math.min(max, v + (Math.random() * 2 - 1) * amt));
-            this.sessionMood.activity = drift(this.sessionMood.activity, 0.035, 0.18, 0.45);
-            this.sessionMood.brightness = drift(this.sessionMood.brightness, 0.03, 0.15, 0.38);
-            this.sessionMood.ghostVoiceChance = drift(this.sessionMood.ghostVoiceChance, 0.03, 0.08, 0.28);
-
-            const nextEnd = this._schedulePhrase(start);
-            const delayMs = Math.max(1000, (nextEnd - this.audioCtx.currentTime - 1.0) * 1000);
-            this.zenTimeoutId = setTimeout(this._zenLoop, delayMs);
-        } catch (e) {
-            this.zenTimeoutId = setTimeout(this._zenLoop, 5000);
+        // Tocamos de 1 a 3 notas casi al mismo tiempo (como un arpegio muy abierto)
+        const now = this.audioCtx.currentTime;
+        const notesToPlay = Math.floor(Math.random() * 3) + 1;
+        
+        for(let i = 0; i < notesToPlay; i++) {
+            // Separadas por fracciones de segundo
+            this._playZenNote(now + (i * Math.random() * 0.8));
         }
+
+        // El siguiente evento musical ocurrirá entre 4 y 12 segundos después
+        const nextDelayMs = 4000 + Math.random() * 8000;
+        this.zenTimeoutId = setTimeout(this._zenLoop, nextDelayMs);
     }
 
     startZenMusic() {
         if (!this.audioCtx) return;
+        
         const t = this.audioCtx.currentTime;
-        this.musicMaster.gain.cancelScheduledValues(t);
-        this.musicMaster.gain.setTargetAtTime(0.8, t, 1.0); 
+        if (this.masterMusic) {
+            this.masterMusic.gain.cancelScheduledValues(t);
+            this.masterMusic.gain.setTargetAtTime(0.6, t, 1.0); 
+        }
 
-        this.lastPhraseEndedAt = this.audioCtx.currentTime + 1.0 + Math.random() * 4.0;
+        // Inicia el bucle infinito
         this._zenLoop();
     }
 
     stopZenMusic() {
         clearTimeout(this.zenTimeoutId);
-        if (!this.audioCtx || !this.musicMaster) return;
+        if (!this.audioCtx || !this.masterMusic) return;
 
         const t = this.audioCtx.currentTime;
-        this.musicMaster.gain.cancelScheduledValues(t);
-        this.musicMaster.gain.setTargetAtTime(0.0, t, 0.5);
+        this.masterMusic.gain.cancelScheduledValues(t);
+        this.masterMusic.gain.setTargetAtTime(0.0, t, 0.5); // Apaga suavemente
     }
 }

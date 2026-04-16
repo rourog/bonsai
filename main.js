@@ -177,9 +177,11 @@ const updatePot = () => {
     }
 };
 
+// --- FUNCIÓN CENTRAL DE REGENERACIÓN COMPLETAMENTE CAÓTICA ---
 function ejecutarMutacion() {
     if (isDying) return;
     iniciarMuerte(() => {
+        // Usamos Math.random() puro para independizar la interfaz de la semilla del árbol
         const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
         const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
         const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
@@ -189,16 +191,20 @@ function ejecutarMutacion() {
         actualizarUI('p-maceta-color', cMaceta, false);
         actualizarUI('p-forma', fHoja, false);
         actualizarUI('p-flora', tFlora, false);
-        actualizarUI('p-viento', Math.floor(rnd(10, 80)), false);
-        actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1), false);
-        actualizarUI('p-length', Math.floor(rnd(10, 25)), false);
-        actualizarUI('p-lenVar', Math.floor(rnd(0, 80)), false);
-        actualizarUI('p-angle', Math.floor(rnd(15, 75)), false);
-        actualizarUI('p-branch', Math.floor(rnd(40, 90)), false);
-        actualizarUI('p-acc', Math.floor(rnd(10, 60)), false);
-        actualizarUI('p-gen', Math.floor(rnd(4, 7)), false);
-        actualizarUI('p-hojas', Math.floor(rnd(5, 25)), false);
-        actualizarUI('p-flor', Math.floor(rnd(3, 8)), false);
+        
+        // Parámetros de Slider con caos garantizado
+        actualizarUI('p-viento', Math.floor(Math.random() * 70 + 10), false);
+        actualizarUI('p-edadRam', (Math.random() * 3 + 1.5).toFixed(1), false);
+        actualizarUI('p-length', Math.floor(Math.random() * 15 + 10), false);
+        actualizarUI('p-lenVar', Math.floor(Math.random() * 80), false);
+        actualizarUI('p-angle', Math.floor(Math.random() * 60 + 15), false);
+        actualizarUI('p-branch', Math.floor(Math.random() * 50 + 40), false);
+        actualizarUI('p-acc', Math.floor(Math.random() * 50 + 10), false);
+        actualizarUI('p-gen', Math.floor(Math.random() * 3 + 4), false);
+        actualizarUI('p-hojas', Math.floor(Math.random() * 20 + 5), false);
+        
+        // CORRECCIÓN: La floración debe ocurrir entre el año 2 y 5 (nunca más tarde) para garantizar que se vean
+        actualizarUI('p-flor', Math.floor(Math.random() * 4 + 2), false); 
         
         let inputSemilla = document.getElementById('input-semilla');
         if(inputSemilla) inputSemilla.value = Math.random().toString(36).substring(2, 8).toUpperCase();

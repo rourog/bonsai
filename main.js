@@ -39,6 +39,67 @@ const btnAuto = document.getElementById('btn-auto');
 
 const ESTADO_CICLICO = {}; 
 
+// --- SISTEMA DE MEMORIA (LOCALSTORAGE) ---
+function guardarAjustes() {
+    const state = {
+        ui: {},
+        toggles: { showLeaves, showFlowers },
+        seed: document.getElementById('input-semilla') ? document.getElementById('input-semilla').value : ''
+    };
+    
+    // Guardar Sliders
+    document.querySelectorAll('#ui-parametros input[type="range"]').forEach(el => {
+        state.ui[el.id] = el.value;
+    });
+    
+    // Guardar Botones Cíclicos (Maceta, Hojas, etc)
+    ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) state.ui[id] = el.getAttribute('data-value');
+    });
+
+    localStorage.setItem('bonsai_zen_prefs', JSON.stringify(state));
+}
+
+function cargarAjustes() {
+    const saved = localStorage.getItem('bonsai_zen_prefs');
+    if(!saved) return false; // No hay datos previos
+    
+    try {
+        const state = JSON.parse(saved);
+        
+        // Restaurar UI
+        for(let id in state.ui) {
+            actualizarUI(id, state.ui[id], false); // Falso para no detonar un guardado en bucle
+        }
+        
+        // Restaurar Toggles
+        if (state.toggles) {
+            showLeaves = state.toggles.showLeaves !== undefined ? state.toggles.showLeaves : true;
+            showFlowers = state.toggles.showFlowers !== undefined ? state.toggles.showFlowers : true;
+            
+            const btnHojas = document.getElementById('btn-hojas');
+            const btnFlores = document.getElementById('btn-flores');
+            if(btnHojas) btnHojas.classList.toggle('active-toggle', showLeaves);
+            if(btnFlores) btnFlores.classList.toggle('active-toggle', showFlowers);
+        }
+
+        // Restaurar Semilla (Solo si no hay una en la URL)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (!urlParams.get('seed') && state.seed) {
+            const inputSemilla = document.getElementById('input-semilla');
+            if(inputSemilla) inputSemilla.value = state.seed;
+        }
+
+        updatePot();
+        return true;
+    } catch(e) { 
+        console.warn("Error leyendo preferencias locales.", e);
+        return false; 
+    }
+}
+// -----------------------------------------
+
 function construirInterfaz() {
     const contenedorMorfologia = document.getElementById('ui-morfologia');
     const contenedorParametros = document.getElementById('ui-parametros');
@@ -78,6 +139,7 @@ function construirInterfaz() {
                 e.currentTarget.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
                 
                 if(id.startsWith('p-maceta')) updatePot();
+                guardarAjustes(); // Guardar al hacer clic
             });
         }
     });
@@ -89,7 +151,16 @@ function construirInterfaz() {
             if(isDecimal && Number.isInteger(parseFloat(val))) val += ".0";
             document.getElementById(`val-${e.target.id}`).textContent = val;
         });
+        
+        // Guardar cuando se suelta el slider para no saturar el LocalStorage
+        input.addEventListener('change', () => { guardarAjustes(); });
     });
+    
+    // Escuchar cambios directos en el input de la semilla
+    const inputSemilla = document.getElementById('input-semilla');
+    if(inputSemilla) {
+        inputSemilla.addEventListener('change', () => { guardarAjustes(); });
+    }
 }
 
 function crearBotonCiclico(id, prefix, opciones) {
@@ -117,7 +188,7 @@ export function getParams() {
     return params;
 }
 
-function actualizarUI(id, valor) {
+function actualizarUI(id, valor, triggerSave = true) {
     let el = document.getElementById(id);
     if(!el) return;
     
@@ -133,6 +204,8 @@ function actualizarUI(id, valor) {
         el.value = valor;
         el.dispatchEvent(new Event('input'));
     }
+    
+    if(triggerSave) guardarAjustes();
 }
 
 const updatePot = () => {
@@ -143,7 +216,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR MEJORADO: ASTILLADO TEMPRANO Y OPACIDAD GLOBAL ---
+// --- ORQUESTADOR: ASTILLADO TEMPRANO Y OPACIDAD GLOBAL ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -318,19 +391,15 @@ function iniciarMuerte(callbackRenacer) {
         hojasF.forEach(p => {
             if (p.dom.style.display !== 'none') {
                 completado = false;
-                
                 if (elapsed > p.fallTime) {
                     let age = elapsed - p.fallTime; 
                     p.vy += 0.03; 
                     p.vx += Math.sin(now * 0.003 + p.y) * 0.05; 
-                    p.vx *= 0.92; 
-                    p.vy *= 0.95; 
+                    p.vx *= 0.92; p.vy *= 0.95; 
                     p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
 
                     let op = p.startOpacity;
-                    if (age > 700) {
-                        op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
-                    }
+                    if (age > 700) op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
                     
                     p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
                     p.dom.setAttribute('opacity', op);
@@ -392,7 +461,6 @@ function iniciarMuerte(callbackRenacer) {
                 
                 if (elapsed > r.fallTime) {
                     let age = elapsed - r.fallTime;
-                    
                     if (!r.tocandoSuelo) {
                         r.vy += 0.6; 
                         r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
@@ -406,9 +474,7 @@ function iniciarMuerte(callbackRenacer) {
                     }
 
                     let op = 1;
-                    if (age > 800) { 
-                        op = Math.max(0, 1 - (age - 800) / 400);
-                    }
+                    if (age > 800) op = Math.max(0, 1 - (age - 800) / 400);
 
                     r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
                     r.dom.setAttribute('opacity', op);
@@ -436,7 +502,6 @@ function iniciarMuerte(callbackRenacer) {
                 }
             });
 
-            // SOLUCIÓN AL TRASLAPE: Aplicamos la opacidad al contenedor padre, no a cada rama.
             if (elapsed > trunkTime + 1000) {
                 let opFinal = 1 - ((elapsed - (trunkTime + 1000)) / 800); 
                 domContext.layerTree.setAttribute('opacity', Math.max(0, opFinal));
@@ -529,19 +594,45 @@ document.getElementById('btn-step').addEventListener('click', () => {
 btnAuto.addEventListener('click', (e) => {
     isAutoGrowing = !isAutoGrowing;
     if(isAutoGrowing) {
-        e.target.classList.add('active-toggle');
-        e.target.innerHTML = "Auto-Crecer: ON";
+        e.currentTarget.classList.add('active-toggle');
+        e.currentTarget.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
     } else {
-        e.target.classList.remove('active-toggle');
-        e.target.innerHTML = "Auto-Crecer: OFF";
+        e.currentTarget.classList.remove('active-toggle');
+        e.currentTarget.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF';
     }
 });
 
-document.getElementById('btn-hojas').addEventListener('click', (e) => { showLeaves = !showLeaves; e.target.classList.toggle('active-toggle', showLeaves); });
-document.getElementById('btn-flores').addEventListener('click', (e) => { showFlowers = !showFlowers; e.target.classList.toggle('active-toggle', showFlowers); });
-document.getElementById('btn-sfx').addEventListener('click', (e) => { const activado = audioMotor.toggleSfx(); e.target.classList.toggle('active-toggle', activado); e.target.innerHTML = activado ? "🍃 SFX: ON" : "🍃 SFX: OFF"; });
-document.getElementById('btn-music').addEventListener('click', (e) => { const activado = audioMotor.toggleMusic(); e.target.classList.toggle('active-toggle', activado); e.target.innerHTML = activado ? "🎵 MÚSICA: ON" : "🎵 MÚSICA: OFF"; });
-document.getElementById('btn-fondo').addEventListener('click', (e) => { const activado = entornoMotor.toggleSky(); e.target.classList.toggle('active-toggle', activado); e.target.innerHTML = activado ? "🌅 CIELO: ON" : "🌅 CIELO: OFF"; });
+document.getElementById('btn-hojas').addEventListener('click', (e) => { 
+    showLeaves = !showLeaves; 
+    e.currentTarget.classList.toggle('active-toggle', showLeaves); 
+    guardarAjustes();
+});
+document.getElementById('btn-flores').addEventListener('click', (e) => { 
+    showFlowers = !showFlowers; 
+    e.currentTarget.classList.toggle('active-toggle', showFlowers); 
+    guardarAjustes();
+});
+
+document.getElementById('btn-sfx').addEventListener('click', (e) => { 
+    const activado = audioMotor.toggleSfx(); 
+    e.currentTarget.classList.toggle('active-toggle', activado); 
+    e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">volume_up</span> SFX: ON' : '<span class="material-symbols-rounded">volume_off</span> SFX: OFF'; 
+    guardarAjustes();
+});
+
+document.getElementById('btn-music').addEventListener('click', (e) => { 
+    const activado = audioMotor.toggleMusic(); 
+    e.currentTarget.classList.toggle('active-toggle', activado); 
+    e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">music_note</span> MÚSICA: ON' : '<span class="material-symbols-rounded">music_off</span> MÚSICA: OFF'; 
+    guardarAjustes();
+});
+
+document.getElementById('btn-fondo').addEventListener('click', (e) => { 
+    const activado = entornoMotor.toggleSky(); 
+    e.currentTarget.classList.toggle('active-toggle', activado); 
+    e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">landscape</span> CIELO: ON' : '<span class="material-symbols-rounded">image</span> CIELO: OFF'; 
+    guardarAjustes();
+});
 
 document.getElementById('btn-mutar').addEventListener('click', () => {
     if (isDying) return;
@@ -552,26 +643,27 @@ document.getElementById('btn-mutar').addEventListener('click', () => {
         const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
         const tFlora = DICCIONARIO_BOTANICO.flora[Math.floor(Math.random() * DICCIONARIO_BOTANICO.flora.length)].id;
         
-        actualizarUI('p-maceta-forma', fMaceta);
-        actualizarUI('p-maceta-color', cMaceta);
-        actualizarUI('p-forma', fHoja);
-        actualizarUI('p-flora', tFlora);
+        actualizarUI('p-maceta-forma', fMaceta, false);
+        actualizarUI('p-maceta-color', cMaceta, false);
+        actualizarUI('p-forma', fHoja, false);
+        actualizarUI('p-flora', tFlora, false);
         
-        actualizarUI('p-viento', Math.floor(rnd(10, 80)));
-        actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1));
-        actualizarUI('p-length', Math.floor(rnd(10, 25)));
-        actualizarUI('p-lenVar', Math.floor(rnd(0, 80)));
-        actualizarUI('p-angle', Math.floor(rnd(15, 75)));
-        actualizarUI('p-branch', Math.floor(rnd(40, 90)));
-        actualizarUI('p-acc', Math.floor(rnd(10, 60)));
-        actualizarUI('p-gen', Math.floor(rnd(4, 7)));
-        actualizarUI('p-hojas', Math.floor(rnd(5, 25)));
-        actualizarUI('p-flor', Math.floor(rnd(3, 8)));
+        actualizarUI('p-viento', Math.floor(rnd(10, 80)), false);
+        actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1), false);
+        actualizarUI('p-length', Math.floor(rnd(10, 25)), false);
+        actualizarUI('p-lenVar', Math.floor(rnd(0, 80)), false);
+        actualizarUI('p-angle', Math.floor(rnd(15, 75)), false);
+        actualizarUI('p-branch', Math.floor(rnd(40, 90)), false);
+        actualizarUI('p-acc', Math.floor(rnd(10, 60)), false);
+        actualizarUI('p-gen', Math.floor(rnd(4, 7)), false);
+        actualizarUI('p-hojas', Math.floor(rnd(5, 25)), false);
+        actualizarUI('p-flor', Math.floor(rnd(3, 8)), false);
         
         let inputSemilla = document.getElementById('input-semilla');
         if(inputSemilla) inputSemilla.value = Math.random().toString(36).substring(2, 8).toUpperCase();
         
         updatePot();
+        guardarAjustes();
         inicializarArbol();
     });
 });
@@ -586,7 +678,7 @@ btnZenMain.addEventListener('click', (e) => {
         
         isAutoGrowing = true;
         btnAuto.classList.add('active-toggle');
-        btnAuto.innerHTML = "Auto-Crecer: ON";
+        btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
         
         if (iteracionGlobal > 18) { document.getElementById('btn-mutar').click(); } 
         if (audioIniciado) audioMotor.resumeMusic();
@@ -615,25 +707,26 @@ window.aplicarPreset = function(tipo) {
     if(isDying) return;
     iniciarMuerte(() => {
         const p = PRESETS_BOTANICOS[tipo];
-        actualizarUI('p-maceta-forma', p.mForma);
-        actualizarUI('p-maceta-color', p.mColor);
-        actualizarUI('p-forma', p.forma);
-        actualizarUI('p-flora', p.flora);
-        actualizarUI('p-viento', p.viento);
-        actualizarUI('p-edadRam', p.edadRam);
-        actualizarUI('p-length', p.length);
-        actualizarUI('p-lenVar', p.lenVar);
-        actualizarUI('p-angle', p.angle);
-        actualizarUI('p-branch', p.branch);
-        actualizarUI('p-acc', p.acc);
-        actualizarUI('p-gen', p.gen);
-        actualizarUI('p-hojas', p.hojas);
-        actualizarUI('p-flor', p.flor);
+        actualizarUI('p-maceta-forma', p.mForma, false);
+        actualizarUI('p-maceta-color', p.mColor, false);
+        actualizarUI('p-forma', p.forma, false);
+        actualizarUI('p-flora', p.flora, false);
+        actualizarUI('p-viento', p.viento, false);
+        actualizarUI('p-edadRam', p.edadRam, false);
+        actualizarUI('p-length', p.length, false);
+        actualizarUI('p-lenVar', p.lenVar, false);
+        actualizarUI('p-angle', p.angle, false);
+        actualizarUI('p-branch', p.branch, false);
+        actualizarUI('p-acc', p.acc, false);
+        actualizarUI('p-gen', p.gen, false);
+        actualizarUI('p-hojas', p.hojas, false);
+        actualizarUI('p-flor', p.flor, false);
         
         let inputSemilla = document.getElementById('input-semilla');
         if(inputSemilla) inputSemilla.value = tipo.toUpperCase() + "-" + Math.floor(Math.random()*99);
         
         updatePot();
+        guardarAjustes();
         inicializarArbol();
     });
 }
@@ -657,7 +750,7 @@ function bucleAnimacion() {
             } else {
                 isAutoGrowing = false;
                 btnAuto.classList.remove('active-toggle');
-                btnAuto.innerHTML = "Auto-Crecer: OFF";
+                btnAuto.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF';
             }
         }
     }
@@ -674,7 +767,6 @@ function inicializarArbol() {
     domContext.layerLeaves.innerHTML = ''; 
     domContext.layerFlowers.innerHTML = '';
     
-    // RESTAURAMOS LA OPACIDAD GLOBAL PARA EL NUEVO ÁRBOL
     domContext.layerTree.setAttribute('opacity', '1');
     
     if (animationFrameId) {
@@ -688,6 +780,7 @@ function inicializarArbol() {
         if (!textoSemilla) {
             textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase();
             inputSemilla.value = textoSemilla;
+            guardarAjustes();
         }
         setSeed(textoSemilla);
         
@@ -707,6 +800,7 @@ function inicializarArbol() {
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     
+    // 1. Verificamos si hay una semilla forzada en la URL
     const urlParams = new URLSearchParams(window.location.search);
     const semillaURL = urlParams.get('seed');
     let inputSemilla = document.getElementById('input-semilla');
@@ -718,13 +812,20 @@ window.addEventListener('DOMContentLoaded', () => {
     if (btnCopiar) {
         btnCopiar.addEventListener('click', () => {
             navigator.clipboard.writeText(window.location.href).then(() => {
-                btnCopiar.innerHTML = "✓";
-                setTimeout(() => btnCopiar.innerHTML = "🔗", 2000);
+                btnCopiar.innerHTML = '<span class="material-symbols-rounded">check</span>';
+                setTimeout(() => btnCopiar.innerHTML = '<span class="material-symbols-rounded">content_copy</span>', 2000);
             });
         });
     }
 
-    window.aplicarPreset('pino'); 
+    // 2. Cargamos ajustes guardados. Si no hay, aplicamos el preset 'pino'
+    const datosCargados = cargarAjustes();
+    if (!datosCargados) {
+        window.aplicarPreset('pino'); 
+    } else {
+        // Si cargó datos, hay que detonar inicializarArbol manualmente porque no lo hicimos por preset
+        inicializarArbol();
+    }
     
     isZenMode = true;
     document.body.classList.add('zen-active');
@@ -732,11 +833,11 @@ window.addEventListener('DOMContentLoaded', () => {
     
     isAutoGrowing = true;
     btnAuto.classList.add('active-toggle');
-    btnAuto.innerHTML = "Auto-Crecer: ON";
+    btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
 
     let btnFondo = document.getElementById('btn-fondo');
     if (btnFondo && !btnFondo.classList.contains('active-toggle')) {
-        btnFondo.click();
+        btnFondo.click(); // Esto también gatillará un guardarAjustes internamente
     }
     
     solicitarWakeLock();

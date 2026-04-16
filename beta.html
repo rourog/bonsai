@@ -63,9 +63,20 @@
             <span class="material-symbols-rounded" style="font-size: 32px;">self_improvement</span>
         </button>
 
-        <button id="btn-open-config" class="action-btn" style="position: absolute; bottom: 20px; left: 20px; z-index: 90;">
-            <span class="material-symbols-rounded">settings</span> AJUSTES
-        </button>
+        <div id="quick-actions" class="quick-actions-column">
+            <button id="btn-open-config" class="fab-small" title="Abrir Ajustes">
+                <span class="material-symbols-rounded">settings</span>
+            </button>
+            <button id="btn-fondo-quick" class="fab-small" title="Cielo / Fondo">
+                <span class="material-symbols-rounded">image</span>
+            </button>
+            <button id="btn-music-quick" class="fab-small" title="Música">
+                <span class="material-symbols-rounded">music_off</span>
+            </button>
+            <button id="btn-sfx-quick" class="fab-small" title="Efectos de Sonido">
+                <span class="material-symbols-rounded">volume_off</span>
+            </button>
+        </div>
 
         <aside id="dashboard">
             <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -133,7 +144,7 @@
 
     </div>
 
-    <script type="module" src="./main.js?v=11"></script>
+    <script type="module" src="./main.js?v=15"></script>
 
 </body>
 </html>

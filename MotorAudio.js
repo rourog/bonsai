@@ -6,12 +6,14 @@ export class MotorAudio {
         this.sfxEnabled = false;
         this.musicEnabled = false;
         
+        // Nodos SFX Continuos
         this.windGainNode = null;
         this.leavesGainNode = null;
         this.cricketGainNode = null;
         this.noiseBuffer = null;
         this.masterGainSFX = null;
         
+        // Timers y Limitadores
         this.ambientTimeout = null;
         this.zenTimeoutId = null;
         this.lastPopTime = 0; 
@@ -29,10 +31,12 @@ export class MotorAudio {
         if (!this.audioCtx) {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             
+            // Canal de SFX con Volumen Maestro Potenciado
             this.masterGainSFX = this.audioCtx.createGain();
             this.masterGainSFX.connect(this.audioCtx.destination);
-            this.masterGainSFX.gain.value = 0.5;
+            this.masterGainSFX.gain.value = 0.8; // 80% de volumen para efectos
             
+            // Canal de Música
             this.masterMusic = this.audioCtx.createGain();
             this.masterMusic.connect(this.audioCtx.destination);
             this.masterMusic.gain.value = 0.6; 
@@ -141,20 +145,20 @@ export class MotorAudio {
         } catch(e) {}
     }
 
-    // --- EFECTOS DE SONIDO OPTIMIZADOS ---
+    // --- EFECTOS DE SONIDO OPTIMIZADOS (FOLEY PROCEDURAL) ---
 
     ecosistemaAmbiental = () => {
         if (!this.sfxEnabled || !this.audioCtx) return;
         const dado = Math.random();
         const tiempo = this.audioCtx.currentTime;
         
-        // Despachador ajustado con la Rana y el Agua Corriendo
         if (dado > 0.85) this.playCarpintero(tiempo);
         else if (dado > 0.70) this.playCampanaViento(tiempo);
         else if (dado > 0.55) this.playAve(tiempo);
         else if (dado > 0.40) this.playAguaCorriendo(tiempo); 
         else if (dado > 0.25) this.playRana(tiempo); 
-        else if (dado > 0.10) this.playRamaSeca(tiempo);
+        else if (dado > 0.12) this.playHojasCrujiendo(tiempo);
+        else this.playRamaSeca(tiempo);
         
         this.ambientTimeout = setTimeout(this.ecosistemaAmbiental, 3000 + Math.random() * 7000);
     }
@@ -175,8 +179,8 @@ export class MotorAudio {
             osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.1);
             
             gain.gain.setValueAtTime(0, time);
-            // VOLUMEN SUBIDO: De 0.06 a 0.35 para que se escuche claro al florecer
-            gain.gain.linearRampToValueAtTime(0.35, time + 0.01); 
+            // VOLUMEN BOOST: Mucho más audible
+            gain.gain.linearRampToValueAtTime(0.4, time + 0.01); 
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15); 
             
             osc.start(time); osc.stop(time + 0.15);
@@ -187,7 +191,6 @@ export class MotorAudio {
     playCampanaViento(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
-        // MULTIPLES NOTAS: 2 a 4 tubos golpeados por el viento
         const numNotas = Math.floor(Math.random() * 3) + 2; 
         
         for(let i = 0; i < numNotas; i++) {
@@ -197,11 +200,10 @@ export class MotorAudio {
             osc.type = 'sine';
             osc.frequency.value = this.chimeNotes[Math.floor(Math.random() * this.chimeNotes.length)];
             
-            // Retraso orgánico entre cada tubo chocado
             let t = tiempoActual + (i * (0.05 + Math.random() * 0.15)); 
             
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.001, t + 4.0); 
             osc.start(t); osc.stop(t + 4.5);
             osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
@@ -211,21 +213,19 @@ export class MotorAudio {
     playCarpintero(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
-        // GOLPES MÚLTIPLES RÁPIDOS (Ráfaga de picotazos)
         const golpes = 8 + Math.floor(Math.random() * 6); 
-        const velocidad = 0.07; // Frecuencia del picoteo
+        const velocidad = 0.07; 
         
         for(let i = 0; i < golpes; i++) {
             let t = tiempoActual + (i * velocidad);
             
-            // Síntesis de bloque de madera: Onda cuadrada con caída drástica de afinación
             const osc = this.audioCtx.createOscillator();
             const gain = this.audioCtx.createGain();
             const filter = this.audioCtx.createBiquadFilter();
             
             osc.type = 'square';
             osc.frequency.setValueAtTime(1000, t);
-            osc.frequency.exponentialRampToValueAtTime(200, t + 0.02); // El secreto del sonido percusivo
+            osc.frequency.exponentialRampToValueAtTime(200, t + 0.02); 
             
             filter.type = 'bandpass';
             filter.frequency.value = 800; 
@@ -234,7 +234,7 @@ export class MotorAudio {
             osc.connect(filter).connect(gain).connect(this.masterGainSFX);
             
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.3, t + 0.005); 
+            gain.gain.linearRampToValueAtTime(0.4, t + 0.005); 
             gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04); 
             
             osc.start(t);
@@ -246,30 +246,43 @@ export class MotorAudio {
     playAguaCorriendo(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
-        // RIACHUELO: Ruido filtrado con frecuencias burbujeantes
-        const noise = this.crearFuenteRuido();
+        // RIACHUELO: Ruido modulado por baja frecuencia
+        const noise = this.audioCtx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+        noise.loop = true;
+
         const filter = this.audioCtx.createBiquadFilter();
-        const gain = this.audioCtx.createGain();
-        
         filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(300, tiempoActual);
+        filter.frequency.value = 600;
+        filter.Q.value = 0.8; // Menos Q = Menos metálico, más ancho
+
+        const amGain = this.audioCtx.createGain(); // Modulador de amplitud
         
-        // LFO en la frecuencia para simular el burbujeo
-        for(let i=0; i<8; i++) {
-            filter.frequency.linearRampToValueAtTime(300 + Math.random()*700, tiempoActual + (i*0.5));
-        }
-        filter.Q.value = 1.5;
+        // LFO para hacer el efecto de burbujeo / salpicadura
+        const lfo = this.audioCtx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 15 + Math.random() * 10;
         
-        noise.connect(filter).connect(gain).connect(this.masterGainSFX);
+        const lfoGain = this.audioCtx.createGain();
+        lfoGain.gain.value = 0.8;
         
-        gain.gain.setValueAtTime(0, tiempoActual);
-        gain.gain.linearRampToValueAtTime(0.2, tiempoActual + 1.0); // Entra suave
-        gain.gain.linearRampToValueAtTime(0.2, tiempoActual + 3.0); // Mantiene
-        gain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 4.0); // Sale suave
+        lfo.connect(lfoGain).connect(amGain.gain);
+
+        const masterGain = this.audioCtx.createGain();
         
-        noise.start(tiempoActual);
-        noise.stop(tiempoActual + 4.5);
-        noise.onended = () => { try { noise.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
+        noise.connect(filter).connect(amGain).connect(masterGain).connect(this.masterGainSFX);
+        
+        const duracion = 3.0 + Math.random() * 2.0;
+
+        masterGain.gain.setValueAtTime(0, tiempoActual);
+        masterGain.gain.linearRampToValueAtTime(0.6, tiempoActual + 1.0); // Boost de volumen
+        masterGain.gain.linearRampToValueAtTime(0.6, tiempoActual + duracion - 1.0); 
+        masterGain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + duracion); 
+        
+        noise.start(tiempoActual); lfo.start(tiempoActual);
+        noise.stop(tiempoActual + duracion + 0.1); lfo.stop(tiempoActual + duracion + 0.1);
+        
+        noise.onended = () => { try { noise.disconnect(); lfo.disconnect(); filter.disconnect(); amGain.disconnect(); masterGain.disconnect(); } catch(e){} };
     }
 
     playRana(tiempoActual) {
@@ -279,31 +292,29 @@ export class MotorAudio {
         const gain = this.audioCtx.createGain();
         const filter = this.audioCtx.createBiquadFilter();
         
-        // Frecuencia base gutural
         osc.type = 'sawtooth';
         osc.frequency.value = 70 + Math.random() * 20; 
         
-        // Modulación de Amplitud (AM) para hacer el vibrato del croar
         const lfo = this.audioCtx.createOscillator();
         const lfoGain = this.audioCtx.createGain();
         lfo.type = 'square';
-        lfo.frequency.value = 35; // Temblor a 35Hz
-        lfoGain.gain.value = 0.5; 
+        lfo.frequency.value = 35; 
+        lfoGain.gain.value = 1.0; 
         
         const amGain = this.audioCtx.createGain();
         lfo.connect(lfoGain).connect(amGain.gain);
         
-        filter.type = 'bandpass';
-        filter.frequency.value = 800 + Math.random() * 300; 
-        filter.Q.value = 2.0;
+        filter.type = 'peaking'; // Da resonancia gutural
+        filter.frequency.value = 800; 
+        filter.Q.value = 5.0;
         
         osc.connect(amGain).connect(filter).connect(gain).connect(this.masterGainSFX);
         
         const duracion = 0.4 + Math.random() * 0.3;
         
         gain.gain.setValueAtTime(0, tiempoActual);
-        gain.gain.linearRampToValueAtTime(0.3, tiempoActual + 0.1);
-        gain.gain.linearRampToValueAtTime(0.3, tiempoActual + duracion - 0.1);
+        gain.gain.linearRampToValueAtTime(0.8, tiempoActual + 0.1); // Super boost a la ganancia
+        gain.gain.linearRampToValueAtTime(0.8, tiempoActual + duracion - 0.1);
         gain.gain.linearRampToValueAtTime(0.001, tiempoActual + duracion);
         
         osc.start(tiempoActual); lfo.start(tiempoActual);
@@ -312,51 +323,72 @@ export class MotorAudio {
         osc.onended = () => { try { osc.disconnect(); lfo.disconnect(); amGain.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
     }
 
-    playAve(tiempoActual) {
-        if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
-        const trinos = Math.floor(Math.random() * 3) + 2; 
-        let t = tiempoActual;
-        for (let i = 0; i < trinos; i++) {
-            const osc = this.audioCtx.createOscillator();
-            const gain = this.audioCtx.createGain();
-            osc.connect(gain).connect(this.masterGainSFX);
-            osc.type = 'sine';
-            const baseFreq = 2000 + Math.random() * 1500; 
-            osc.frequency.setValueAtTime(baseFreq, t);
-            const direccion = Math.random() > 0.5 ? 800 : -800; 
-            osc.frequency.exponentialRampToValueAtTime(baseFreq + direccion, t + 0.1);
-            gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-            osc.start(t); osc.stop(t + 0.15);
-            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
-            t += 0.1 + Math.random() * 0.1; 
-        }
-    }
-
     playRamaSeca(time) {
         if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         try {
+            // Parte 1: El golpe sordo (Oscilador)
             const osc = this.audioCtx.createOscillator();
-            const gain = this.audioCtx.createGain();
-            const filter = this.audioCtx.createBiquadFilter();
+            const oscGain = this.audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(200, time);
+            osc.frequency.exponentialRampToValueAtTime(30, time + 0.05);
             
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(150 + Math.random() * 200, time);
-            osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
+            oscGain.gain.setValueAtTime(0, time);
+            oscGain.gain.linearRampToValueAtTime(0.5, time + 0.01);
+            oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+            
+            // Parte 2: El crujido de la madera (Ruido Blanco)
+            const noise = this.audioCtx.createBufferSource();
+            noise.buffer = this.noiseBuffer;
+            const filter = this.audioCtx.createBiquadFilter();
+            const noiseGain = this.audioCtx.createGain();
             
             filter.type = 'bandpass'; 
-            filter.frequency.value = 1000 + Math.random() * 2000; 
-            filter.Q.value = 2;
+            filter.frequency.value = 1500; 
+            filter.Q.value = 1.5;
             
-            gain.gain.setValueAtTime(0, time);
-            gain.gain.linearRampToValueAtTime(0.08, time + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+            noiseGain.gain.setValueAtTime(0, time);
+            noiseGain.gain.linearRampToValueAtTime(0.5, time + 0.01);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
             
-            osc.connect(filter).connect(gain).connect(this.masterGainSFX);
-            osc.start(time); osc.stop(time + 0.2);
-            osc.onended = () => { try { osc.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
+            osc.connect(oscGain).connect(this.masterGainSFX);
+            noise.connect(filter).connect(noiseGain).connect(this.masterGainSFX);
+            
+            osc.start(time); osc.stop(time + 0.15);
+            noise.start(time); noise.stop(time + 0.2);
+            
+            noise.onended = () => { try { osc.disconnect(); oscGain.disconnect(); noise.disconnect(); filter.disconnect(); noiseGain.disconnect(); } catch(e){} };
         } catch(e){}
+    }
+
+    playHojasCrujiendo(tiempoActual) {
+        if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
+        
+        // Micro ráfagas irregulares de ruido agudo
+        const ráfagas = 4 + Math.floor(Math.random() * 4);
+        for(let i = 0; i < ráfagas; i++) {
+            // El Math.random() en el tiempo da la irregularidad natural del crujido
+            const t = tiempoActual + (i * 0.08) + (Math.random() * 0.04);
+            
+            const noise = this.audioCtx.createBufferSource();
+            noise.buffer = this.noiseBuffer;
+
+            const filter = this.audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(4000 + Math.random() * 2000, t);
+            filter.Q.value = 3; // Medio ancho para que suene a textura, no a silbido
+
+            const gain = this.audioCtx.createGain();
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+            noise.connect(filter).connect(gain).connect(this.masterGainSFX);
+            noise.start(t);
+            noise.stop(t + 0.07);
+            
+            noise.onended = () => { try { noise.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
+        }
     }
 
     // ==========================================

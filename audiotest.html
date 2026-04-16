@@ -88,6 +88,7 @@
         <div class="grid">
             <button class="sfx-btn" id="btn-pop" disabled>🌸 Pop (Nace Flor)</button>
             <button class="sfx-btn" id="btn-rama" disabled>🪵 Rama Seca</button>
+            <button class="sfx-btn" id="btn-hojas-crujiendo" disabled>🍂 Hojas Crujiendo</button>
             <button class="sfx-btn" id="btn-ave" disabled>🐦 Trino de Ave</button>
             <button class="sfx-btn" id="btn-agua" disabled>💧 Agua Corriendo</button>
             <button class="sfx-btn" id="btn-rana" disabled>🐸 Rana</button>
@@ -100,42 +101,48 @@
     </div>
 
     <script type="module">
-        import { MotorAudio } from './MotorAudio.js?v=27';
+        import { MotorAudio } from './MotorAudio.js?v=28';
         
         const audio = new MotorAudio();
         const btnPower = document.getElementById('btn-power');
         const sfxBtns = document.querySelectorAll('.sfx-btn');
 
-        // Inicialización
+        // Inicialización del Contexto de Audio
         btnPower.addEventListener('click', () => {
-            // 1. Despertamos el AudioContext
             audio.initCtx();
             if (audio.audioCtx.state === 'suspended') {
                 audio.audioCtx.resume();
             }
             
-            // 2. Engañamos a las banderas internas para permitir los sonidos aislados
+            // Encendemos las banderas para que las funciones no reboten
             audio.sfxEnabled = true;
             audio.musicEnabled = true;
 
-            // 3. Actualizamos UI
+            // Actualizamos Interfaz
             btnPower.classList.add('on');
             btnPower.textContent = "🟢 MOTOR EN LÍNEA Y ESCUCHANDO";
             btnPower.disabled = true;
 
+            // Habilitamos todos los botones de efectos
             sfxBtns.forEach(btn => btn.disabled = false);
         });
 
-        // Helper para obtener el tiempo exacto del reloj de audio
+        // Helper para obtener el tiempo exacto del reloj de audio (fundamental para el timing de Web Audio API)
         const t = () => audio.audioCtx.currentTime;
 
-        // Disparadores
+        // --- ENLACES DE BOTONES ---
+        
         document.getElementById('btn-pop').addEventListener('click', () => {
             audio.playPop();
         });
 
         document.getElementById('btn-rama').addEventListener('click', () => {
             audio.playRamaSeca(t());
+        });
+
+        // NUEVO: Botón de Hojas Crujiendo
+        document.getElementById('btn-hojas-crujiendo').addEventListener('click', () => {
+            audio.playHojasCrujiendo(t());
         });
 
         document.getElementById('btn-ave').addEventListener('click', () => {
@@ -159,7 +166,6 @@
         });
 
         document.getElementById('btn-nota').addEventListener('click', () => {
-            // Seteamos una semilla aleatoria para que cambie la tonalidad a veces
             audio.reseedMusicEngine(Math.random().toString(36).substring(7));
             audio._playZenNote(t());
         });

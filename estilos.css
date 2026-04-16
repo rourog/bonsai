@@ -3,23 +3,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
 
 :root {
-    /* Paleta Zen Botánica */
-    --md-sys-color-primary: #7A9E7E;      /* Verde Salvia */
+    --md-sys-color-primary: #7A9E7E;      
     --md-sys-color-primary-container: #DCE8DD; 
-    --md-sys-color-secondary: #D48C70;    /* Terracota suave */
-    --md-sys-color-surface: rgba(250, 249, 246, 0.75); /* Arena translúcida */
-    --md-sys-color-on-surface: #2C362F;   /* Gris pizarra */
+    --md-sys-color-secondary: #D48C70;    
+    --md-sys-color-surface: rgba(250, 249, 246, 0.75); 
+    --md-sys-color-on-surface: #2C362F;   
     --md-sys-color-outline: #C4C7C5;
     
-    /* Sombras Material Design (Elevation) */
     --md-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
     --md-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
 
-    /* Tipografía */
     --font-principal: 'Outfit', sans-serif;
 }
 
-/* --- RESET Y BASE --- */
 body {
     margin: 0;
     padding: 0;
@@ -31,7 +27,6 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Alineación vertical perfecta para los iconos de Google */
 .material-symbols-rounded {
     font-size: 1.25rem !important;
     vertical-align: middle;
@@ -43,7 +38,8 @@ body {
 /* --- PANEL PRINCIPAL (DASHBOARD) --- */
 #dashboard {
     position: absolute;
-    bottom: 20px;
+    /* Sumamos el Safe Area de Android/iOS al margen inferior */
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     width: 90%;
     max-width: 420px;
@@ -51,55 +47,36 @@ body {
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.4);
-    border-radius: 28px; /* Esquinas Material 3 */
+    border-radius: 28px; 
     padding: 24px;
     box-shadow: var(--md-elevation-3);
     z-index: 100;
     
-    /* Oculto por defecto desplazado hacia abajo */
     transform: translate(-50%, 150%); 
     transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
     
-    /* Scroll interno si la pantalla es muy pequeña */
     max-height: 80vh;
     overflow-y: auto;
     opacity: 0;
-    pointer-events: none; /* Evita clics fantasma cuando está oculto */
+    pointer-events: none; 
 }
 
-/* Ocultar barra de scroll en el panel para un look más limpio */
-#dashboard::-webkit-scrollbar {
-    width: 6px;
-}
-#dashboard::-webkit-scrollbar-thumb {
-    background: rgba(0,0,0,0.15);
-    border-radius: 10px;
-}
+#dashboard::-webkit-scrollbar { width: 6px; }
+#dashboard::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
 
-/* ESTADO ABIERTO DEL PANEL */
 #dashboard.open {
     transform: translate(-50%, 0);
     opacity: 1;
     pointer-events: auto;
 }
 
-/* En Desktop (opcionalmente) puedes forzarlo a siempre visible si lo deseas, 
-   pero el sistema de botón "Ajustes" es más elegante para todas las pantallas */
-@media (min-width: 768px) {
-    /* Mantiene la misma lógica de abrir/cerrar para mantener limpio el canvas */
-}
-
-/* Modo Zen: Oculta el panel dramáticamente */
 body.zen-idle #dashboard {
     transform: translate(-50%, 150%) !important;
     opacity: 0;
     pointer-events: none;
 }
 
-/* --- SECCIONES INTERNAS --- */
-.ui-section {
-    margin-bottom: 24px;
-}
+.ui-section { margin-bottom: 24px; }
 
 .section-label {
     display: block;
@@ -110,7 +87,6 @@ body.zen-idle #dashboard {
     margin-bottom: 12px;
 }
 
-/* --- BOTONES Y GRILLES --- */
 .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -125,7 +101,7 @@ body.zen-idle #dashboard {
     font-size: 0.85rem;
     font-weight: 600;
     padding: 10px 14px;
-    border-radius: 100px; /* Pill shape */
+    border-radius: 100px; 
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
@@ -135,15 +111,9 @@ body.zen-idle #dashboard {
     white-space: nowrap;
 }
 
-.action-btn:hover {
-    background: rgba(0,0,0,0.05);
-}
+.action-btn:hover { background: rgba(0,0,0,0.05); }
+.action-btn:active { transform: scale(0.96); }
 
-.action-btn:active {
-    transform: scale(0.96);
-}
-
-/* Estado Activo (Interruptores Encendidos) */
 .action-btn.active-toggle {
     background: var(--md-sys-color-primary);
     color: white;
@@ -156,7 +126,6 @@ body.zen-idle #dashboard {
     opacity: 0.85;
 }
 
-/* --- SLIDERS (RANGOS) MATERIAL 3 --- */
 .control-group {
     margin-bottom: 16px;
     display: flex;
@@ -193,21 +162,15 @@ input[type=range]::-webkit-slider-thumb {
     width: 22px;
     border-radius: 50%;
     background: var(--md-sys-color-primary);
-    margin-top: -6px;
+    margin-top: -6px; 
     box-shadow: var(--md-elevation-1);
     cursor: pointer;
     transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
 }
 
-input[type=range]::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+input[type=range]::-webkit-slider-thumb:active { transform: scale(0.9); }
 
-input[type=range]::-webkit-slider-thumb:active {
-    transform: scale(0.9);
-}
-
-/* Compatibilidad Firefox */
 input[type=range]::-moz-range-track {
     width: 100%;
     height: 10px;
@@ -225,12 +188,10 @@ input[type=range]::-moz-range-thumb {
     cursor: pointer;
 }
 
-/* --- ELEMENTOS FLOTANTES --- */
-
 /* Indicador de Estadísticas (Nodos / Años) */
 #stats {
     position: absolute;
-    top: 20px;
+    top: calc(20px + env(safe-area-inset-top, 0px));
     left: 50%;
     transform: translateX(-50%);
     background: var(--md-sys-color-surface);
@@ -247,14 +208,13 @@ input[type=range]::-moz-range-thumb {
     border: 1px solid rgba(255,255,255,0.2);
 }
 
-body.zen-idle #stats {
-    opacity: 0;
-}
+body.zen-idle #stats { opacity: 0; }
 
 /* Botón Flotante Maestro Zen (FAB Principal) */
 #btn-zen-main {
     position: absolute;
-    bottom: 20px;
+    /* Sumamos el Safe Area */
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     right: 20px;
     width: 64px;
     height: 64px;
@@ -279,41 +239,34 @@ body.zen-idle #stats {
     border-color: transparent;
 }
 
-#btn-zen-main:hover {
-    transform: scale(1.08);
-}
+#btn-zen-main:hover { transform: scale(1.08); }
+#btn-zen-main:active { transform: scale(0.95); }
 
-#btn-zen-main:active {
-    transform: scale(0.95);
-}
-
-/* --- ACCESOS RÁPIDOS FLOTANTES (COLUMNA DERECHA SOBRE ZEN) --- */
+/* --- ACCESOS RÁPIDOS FLOTANTES (COLUMNA DERECHA) --- */
 .quick-actions-column {
     position: absolute;
-    bottom: 96px; /* Deja espacio exacto para el botón Zen de 64px + 12px de margen */
-    right: 26px; /* Centra perfectamente los botones de 52px con el de 64px */
+    /* 96px base + Safe Area */
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px)); 
+    right: 26px; 
     display: flex;
-    flex-direction: column-reverse; /* Apila hacia arriba: Ajustes queda justo sobre Zen */
+    flex-direction: column-reverse; 
     gap: 16px;
     z-index: 90;
     transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Desaparecen suavemente hacia la derecha cuando no hay actividad (Modo Zen) */
 body.zen-idle .quick-actions-column {
     opacity: 0;
     pointer-events: none;
-    transform: translateX(20px); /* Se esconde hacia el borde derecho */
+    transform: translateX(20px); 
 }
 
-/* Se ocultan si el panel grande de ajustes está abierto */
 body:has(#dashboard.open) .quick-actions-column {
     opacity: 0;
     pointer-events: none;
     transform: scale(0.9);
 }
 
-/* Estilo Base del Botón Rápido (Glassmorphism Zen) */
 .fab-small {
     width: 52px;
     height: 52px;
@@ -336,22 +289,14 @@ body:has(#dashboard.open) .quick-actions-column {
     box-shadow: var(--md-elevation-3);
 }
 
-.fab-small:active {
-    transform: scale(0.95);
-}
+.fab-small:active { transform: scale(0.95); }
 
-/* Variante de Color cuando están encendidos (Verde Salvia) */
 .fab-small.active {
     background: var(--md-sys-color-primary);
     color: white;
     border-color: transparent;
 }
 
-.fab-small .material-symbols-rounded {
-    font-size: 22px !important; 
-}
-
-/* Input de Semilla Específico */
 #input-semilla:focus {
     outline: none;
     border-color: var(--md-sys-color-primary) !important;

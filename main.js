@@ -1,547 +1,662 @@
-// MotorAudio.js
+// main.js
 
-export class MotorAudio {
-    constructor() {
-        this.audioCtx = null;
-        this.sfxEnabled = false;
-        this.musicEnabled = false;
-        
-        // Nodos SFX Continuos
-        this.windGainNode = null;
-        this.leavesGainNode = null;
-        this.cricketGainNode = null;
-        this.noiseBuffer = null;
-        this.masterGainSFX = null;
-        
-        // Timers y Limitadores
-        this.ambientTimeout = null;
-        this.zenTimeoutId = null;
-        this.lastPopTime = 0; 
-        this.lastWindUpdate = 0; 
+import { MotorAudio } from './MotorAudio.js';
+import { MotorEntorno, DICCIONARIO_ENTORNO } from './MotorEntorno.js';
+import { Rama, rnd, setSeed, seededRandom, DICCIONARIO_BOTANICO, PARAMETROS_MOTOR } from './MotorBonsai.js';
 
-        this.chimeNotes = [1200, 1500, 1800, 2100, 2600, 3200];
-        
-        // --- Variables del Sintetizador Musical Zen ---
-        this.musicMaster = null;
-        this.musicDry = null;
-        this.musicReverbSend = null;
-        this.musicCompressor = null;
-        this.musicReverb = null;
+const domContext = {
+    layerPot: document.getElementById('layer-pot'),
+    layerTree: document.getElementById('layer-tree'),
+    layerLeaves: document.getElementById('layer-leaves'),
+    layerFlowers: document.getElementById('layer-flowers')
+};
 
-        this.rootHz = 220.0; 
-        this.scaleRatios = [1, 9/8, 5/4, 3/2, 5/3]; 
-        this.registerMultipliers = [0.5, 1, 2];
-        this.currentDegree = 0;
-        this.currentRegister = 1;
+const audioMotor = new MotorAudio();
+const entornoMotor = new MotorEntorno(domContext);
+domContext.audioMotor = audioMotor;
 
-        this.sessionMood = { activity: 0.35, brightness: 0.28, ghostVoiceChance: 0.22, phraseNoteMin: 1, phraseNoteMax: 3 };
-        this.lastPhraseEndedAt = 0;
-    }
+let arbolBase = null;
+let animationFrameId = null;
+let iteracionGlobal = 0;
+let tiempoViento = 0;
 
-    initCtx() {
-        if (!this.audioCtx) {
-            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            this.masterGainSFX = this.audioCtx.createGain();
-            this.masterGainSFX.connect(this.audioCtx.destination);
-            this.masterGainSFX.gain.value = 0.5;
-            this.crearRuidoBlanco(); 
-            this.initZenMusicEngine(); 
+let isZenMode = false;
+let isAutoGrowing = false;
+let zenPausa = false;
+let isDying = false; 
+let deathFrameId = null;
+let muerteProgramada = false; 
+
+let wakeLock = null; 
+let idleTimeout = null;
+let showLeaves = true;
+let showFlowers = true;
+
+const statsDisplay = document.getElementById('stats');
+const btnZenMain = document.getElementById('btn-zen-main');
+const dashboard = document.getElementById('dashboard');
+const btnAuto = document.getElementById('btn-auto');
+
+const ESTADO_CICLICO = {}; 
+
+function guardarAjustes() {
+    const state = { ui: {}, toggles: { showLeaves, showFlowers } };
+    document.querySelectorAll('#ui-parametros input[type="range"]').forEach(el => state.ui[el.id] = el.value);
+    ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) state.ui[id] = el.getAttribute('data-value');
+    });
+    localStorage.setItem('bonsai_zen_prefs', JSON.stringify(state));
+}
+
+function cargarAjustes() {
+    const saved = localStorage.getItem('bonsai_zen_prefs');
+    if(!saved) return false; 
+    try {
+        const state = JSON.parse(saved);
+        for(let id in state.ui) actualizarUI(id, state.ui[id], false); 
+        if (state.toggles) {
+            showLeaves = state.toggles.showLeaves !== undefined ? state.toggles.showLeaves : true;
+            showFlowers = state.toggles.showFlowers !== undefined ? state.toggles.showFlowers : true;
+            const btnHojas = document.getElementById('btn-hojas');
+            const btnFlores = document.getElementById('btn-flores');
+            if(btnHojas) btnHojas.classList.toggle('active-toggle', showLeaves);
+            if(btnFlores) btnFlores.classList.toggle('active-toggle', showFlowers);
         }
-        if (this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume();
+        updatePot();
+        return true;
+    } catch(e) { return false; }
+}
+
+function construirInterfaz() {
+    const contenedorMorfologia = document.getElementById('ui-morfologia');
+    const contenedorParametros = document.getElementById('ui-parametros');
+
+    let htmlCiclicos = `<div class="grid-2">`;
+    htmlCiclicos += crearBotonCiclico('p-maceta-forma', 'Maceta', DICCIONARIO_ENTORNO.macetas);
+    htmlCiclicos += crearBotonCiclico('p-maceta-color', 'Color', DICCIONARIO_ENTORNO.esmaltes);
+    htmlCiclicos += crearBotonCiclico('p-forma', 'Hoja', DICCIONARIO_BOTANICO.hojas);
+    htmlCiclicos += crearBotonCiclico('p-flora', 'Flora', DICCIONARIO_BOTANICO.flora);
+    htmlCiclicos += `</div>`;
+    contenedorMorfologia.innerHTML = htmlCiclicos;
+
+    let htmlParams = '';
+    PARAMETROS_MOTOR.forEach(param => {
+        const isDecimal = param.step % 1 !== 0;
+        const valTxt = isDecimal ? param.default.toFixed(1) : param.default;
+        const colorStyle = param.color ? `style="color: ${param.color};"` : '';
+        htmlParams += `
+            <div class="control-group">
+                <label><span ${colorStyle}>${param.label}</span> <span id="val-${param.id}" ${colorStyle}>${valTxt}</span></label>
+                <input type="range" id="${param.id}" data-key="${param.key}" min="${param.min}" max="${param.max}" step="${param.step}" value="${param.default}">
+            </div>
+        `;
+    });
+    contenedorParametros.innerHTML = htmlParams;
+
+    ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
+        const btn = document.getElementById(id);
+        if(btn) {
+            btn.addEventListener('click', (e) => {
+                let state = ESTADO_CICLICO[id];
+                state.index = (state.index + 1) % state.opciones.length; 
+                let opt = state.opciones[state.index];
+                e.currentTarget.setAttribute('data-value', opt.id);
+                e.currentTarget.innerHTML = `${state.prefix}: <span>${opt.nombre}</span>`;
+                if(id.startsWith('p-maceta')) updatePot();
+                guardarAjustes(); 
+            });
         }
+    });
+
+    document.querySelectorAll('#ui-parametros input[type="range"]').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const isDecimal = e.target.step % 1 !== 0;
+            let val = isDecimal ? parseFloat(e.target.value).toFixed(1) : e.target.value;
+            if(isDecimal && Number.isInteger(parseFloat(val))) val += ".0";
+            document.getElementById(`val-${e.target.id}`).textContent = val;
+        });
+        input.addEventListener('change', () => guardarAjustes());
+    });
+    
+    const inputSemilla = document.getElementById('input-semilla');
+    if(inputSemilla) {
+        inputSemilla.addEventListener('change', () => { 
+            if(arbolBase && !isDying) iniciarMuerte(inicializarArbol);
+        });
     }
+}
 
-    crearRuidoBlanco() {
-        const bufferSize = this.audioCtx.sampleRate * 2; 
-        this.noiseBuffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
-        const data = this.noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
-        }
-    }
+function crearBotonCiclico(id, prefix, opciones) {
+    ESTADO_CICLICO[id] = { index: 0, opciones, prefix }; 
+    return `<button id="${id}" class="action-btn cyclic-btn" data-value="${opciones[0].id}">${prefix}: <span>${opciones[0].nombre}</span></button>`;
+}
 
-    crearFuenteRuido() {
-        const noiseSource = this.audioCtx.createBufferSource();
-        noiseSource.buffer = this.noiseBuffer;
-        noiseSource.loop = true;
-        noiseSource.start();
-        return noiseSource;
-    }
-
-    initCapasContinuas() {
-        if (this.windGainNode || !this.audioCtx) return;
-        try {
-            const sourceViento = this.crearFuenteRuido();
-            this.filtroViento = this.audioCtx.createBiquadFilter();
-            this.filtroViento.type = 'lowpass';
-            this.filtroViento.frequency.value = 400;
-            this.windGainNode = this.audioCtx.createGain();
-            this.windGainNode.gain.value = 0;
-            sourceViento.connect(this.filtroViento).connect(this.windGainNode).connect(this.masterGainSFX);
-
-            const sourceHojas = this.crearFuenteRuido();
-            const filtroHojas = this.audioCtx.createBiquadFilter();
-            filtroHojas.type = 'bandpass';
-            filtroHojas.frequency.value = 3500;
-            filtroHojas.Q.value = 1.5;
-            this.leavesGainNode = this.audioCtx.createGain();
-            this.leavesGainNode.gain.value = 0;
-            sourceHojas.connect(filtroHojas).connect(this.leavesGainNode).connect(this.masterGainSFX);
-
-            const grilloOsc = this.audioCtx.createOscillator();
-            grilloOsc.type = 'sawtooth';
-            grilloOsc.frequency.value = 4500; 
-
-            const tremolo = this.audioCtx.createOscillator(); 
-            tremolo.type = 'square';
-            tremolo.frequency.value = 30;
-            const tremoloGain = this.audioCtx.createGain();
-            tremoloGain.gain.value = 1;
-            tremolo.connect(tremoloGain.gain);
-
-            this.cricketGainNode = this.audioCtx.createGain();
-            this.cricketGainNode.gain.value = 0; 
-
-            grilloOsc.connect(tremoloGain).connect(this.cricketGainNode).connect(this.masterGainSFX);
-            grilloOsc.start();
-            tremolo.start();
-        } catch (e) { }
-    }
-
-    toggleSfx() {
-        this.sfxEnabled = !this.sfxEnabled;
-        this.initCtx();
-        
-        if (this.sfxEnabled) {
-            this.initCapasContinuas();
-            this.ecosistemaAmbiental(); 
-        } else {
-            clearTimeout(this.ambientTimeout);
-            if (this.windGainNode) this.windGainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.1);
-            if (this.leavesGainNode) this.leavesGainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.1);
-            if (this.cricketGainNode) this.cricketGainNode.gain.setTargetAtTime(0, this.audioCtx.currentTime, 0.1);
-        }
-        return this.sfxEnabled;
-    }
-
-    actualizarViento(tiempoViento, intensidadCien) {
-        if (!this.sfxEnabled || !this.windGainNode || !this.audioCtx) return;
-        
-        const now = performance.now();
-        if (now - this.lastWindUpdate < 100) return; 
-        this.lastWindUpdate = now;
-
-        try {
-            let windIntensity = Math.min(100, Math.max(0, intensidadCien)) / 100;
-            let volViento = windIntensity * (0.05 + 0.1 * Math.abs(Math.sin(tiempoViento * 1.2)));
-            this.windGainNode.gain.setTargetAtTime(volViento, this.audioCtx.currentTime, 0.1);
-            
-            const targetFreq = 200 + (windIntensity * 800) + (Math.sin(tiempoViento * 2) * 300 * windIntensity);
-            this.filtroViento.frequency.setTargetAtTime(Math.max(100, targetFreq), this.audioCtx.currentTime, 0.5);
-
-            let volHojas = windIntensity * (0.02 + 0.08 * Math.abs(Math.sin(tiempoViento * 3.5)));
-            this.leavesGainNode.gain.setTargetAtTime(volHojas, this.audioCtx.currentTime, 0.1);
-            
-            let volGrillos = (1.0 - windIntensity) * 0.02;
-            volGrillos *= (0.5 + 0.5 * Math.sin(tiempoViento * 0.2)); 
-            this.cricketGainNode.gain.setTargetAtTime(volGrillos, this.audioCtx.currentTime, 0.5);
-        } catch(e) {}
-    }
-
-    ecosistemaAmbiental = () => {
-        if (!this.sfxEnabled || !this.audioCtx) return;
-        const dado = Math.random();
-        const tiempo = this.audioCtx.currentTime;
-        
-        if (dado > 0.90) this.playCarpintero(tiempo);
-        else if (dado > 0.75) {
-            this.playCampanaViento(tiempo);
-            if(Math.random() > 0.5) this.playCampanaViento(tiempo + 0.2); 
-        } else if (dado > 0.60) this.playAve(tiempo);
-        else if (dado > 0.45) this.playPezSplash(tiempo);
-        else if (dado > 0.30) this.playRamaSeca(tiempo);
-        
-        this.ambientTimeout = setTimeout(this.ecosistemaAmbiental, 3000 + Math.random() * 7000);
-    }
-
-    playCarpintero(tiempoActual) {
-        if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        const golpes = 6 + Math.floor(Math.random() * 5);
-        for(let i=0; i<golpes; i++) {
-            const noise = this.crearFuenteRuido();
-            const filtro = this.audioCtx.createBiquadFilter();
-            filtro.type = 'bandpass'; 
-            filtro.frequency.value = 800 + (Math.random() * 200); 
-            filtro.Q.value = 3; 
-            
-            const gain = this.audioCtx.createGain();
-            noise.connect(filtro).connect(gain).connect(this.masterGainSFX);
-            const t = tiempoActual + (i * 0.06); 
-            gain.gain.setValueAtTime(0, t);
-            
-            // Volumen reducido al 12% (0.12)
-            gain.gain.linearRampToValueAtTime(0.12, t + 0.005); 
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); 
-            
-            noise.stop(t + 0.05);
-            noise.onended = () => { try { noise.disconnect(); filtro.disconnect(); gain.disconnect(); } catch(e){} };
-        }
-    }
-
-    playCampanaViento(tiempoActual) {
-        if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        const osc = this.audioCtx.createOscillator();
-        const gain = this.audioCtx.createGain();
-        osc.connect(gain).connect(this.masterGainSFX);
-        osc.type = 'sine';
-        osc.frequency.value = this.chimeNotes[Math.floor(Math.random() * this.chimeNotes.length)];
-        gain.gain.setValueAtTime(0, tiempoActual);
-        gain.gain.linearRampToValueAtTime(0.2, tiempoActual + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 4.0); 
-        osc.start(tiempoActual); osc.stop(tiempoActual + 4.5);
-        osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
-    }
-
-    playPezSplash(tiempoActual) {
-        if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        
-        // Bloop líquido y orgánico
-        const osc = this.audioCtx.createOscillator();
-        const gainBloop = this.audioCtx.createGain();
-        osc.type = 'sine'; 
-        osc.frequency.setValueAtTime(400, tiempoActual); 
-        osc.frequency.exponentialRampToValueAtTime(150, tiempoActual + 0.15); 
-        gainBloop.gain.setValueAtTime(0, tiempoActual); 
-        gainBloop.gain.linearRampToValueAtTime(0.3, tiempoActual + 0.02); 
-        gainBloop.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.25);
-        osc.connect(gainBloop).connect(this.masterGainSFX);
-
-        // Swish agudo para la espuma
-        const noise = this.crearFuenteRuido();
-        const filtroNoise = this.audioCtx.createBiquadFilter();
-        filtroNoise.type = 'bandpass'; 
-        filtroNoise.frequency.value = 1200; 
-        const gainNoise = this.audioCtx.createGain();
-        gainNoise.gain.setValueAtTime(0, tiempoActual); 
-        gainNoise.gain.linearRampToValueAtTime(0.1, tiempoActual + 0.02); 
-        gainNoise.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.2);
-        noise.connect(filtroNoise).connect(gainNoise).connect(this.masterGainSFX);
-
-        osc.start(tiempoActual); osc.stop(tiempoActual + 0.3); noise.stop(tiempoActual + 0.25);
-        osc.onended = () => { try { osc.disconnect(); gainBloop.disconnect(); noise.disconnect(); filtroNoise.disconnect(); gainNoise.disconnect(); } catch(e){} };
-    }
-
-    playAve(tiempoActual) {
-        if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        const trinos = Math.floor(Math.random() * 3) + 2; 
-        let t = tiempoActual;
-        for (let i = 0; i < trinos; i++) {
-            const osc = this.audioCtx.createOscillator();
-            const gain = this.audioCtx.createGain();
-            osc.connect(gain).connect(this.masterGainSFX);
-            osc.type = 'sine';
-            const baseFreq = 2000 + Math.random() * 1500; 
-            osc.frequency.setValueAtTime(baseFreq, t);
-            const direccion = Math.random() > 0.5 ? 800 : -800; 
-            osc.frequency.exponentialRampToValueAtTime(baseFreq + direccion, t + 0.1);
-            gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-            osc.start(t); osc.stop(t + 0.15);
-            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
-            t += 0.1 + Math.random() * 0.1; 
-        }
-    }
-
-    playRamaSeca(time) {
-        if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        try {
-            const osc = this.audioCtx.createOscillator();
-            const gain = this.audioCtx.createGain();
-            const filter = this.audioCtx.createBiquadFilter();
-            
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(150 + Math.random() * 200, time);
-            osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
-            
-            filter.type = 'bandpass'; 
-            filter.frequency.value = 1000 + Math.random() * 2000; 
-            filter.Q.value = 2;
-            
-            gain.gain.setValueAtTime(0, time);
-            
-            // Volumen reducido drásticamente al 8% (0.08)
-            gain.gain.linearRampToValueAtTime(0.08, time + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-            
-            osc.connect(filter).connect(gain).connect(this.masterGainSFX);
-            osc.start(time); osc.stop(time + 0.2);
-            osc.onended = () => { try { osc.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
-        } catch(e){}
-    }
-
-    playPop() {
-        if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        if (this.audioCtx.currentTime - this.lastPopTime < 0.1) return;
-        this.lastPopTime = this.audioCtx.currentTime;
-
-        try {
-            const time = this.audioCtx.currentTime;
-            const osc = this.audioCtx.createOscillator();
-            const gain = this.audioCtx.createGain();
-            osc.connect(gain).connect(this.masterGainSFX);
-            osc.type = 'sine';
-            const freq = 600 + Math.random() * 800; 
-            osc.frequency.setValueAtTime(freq, time);
-            osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.1);
-            
-            gain.gain.setValueAtTime(0, time);
-            gain.gain.linearRampToValueAtTime(0.06, time + 0.01); 
-            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15); 
-            
-            osc.start(time); osc.stop(time + 0.15);
-            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
-        } catch (e) {}
-    }
-
-
-    // ==========================================
-    // SECCIÓN 2: MOTOR MUSICAL GENERATIVO (ZEN)
-    // ==========================================
-
-    toggleMusic() {
-        this.musicEnabled = !this.musicEnabled;
-        this.initCtx(); 
-        if (this.musicEnabled) {
-            this.startZenMusic();
-        } else {
-            this.stopZenMusic();
-        }
-        return this.musicEnabled;
-    }
-
-    resumeMusic() {
-        if (this.musicEnabled && this.audioCtx && this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume();
-        }
-    }
-
-    initZenMusicEngine() {
-        if (this.musicMaster) return; 
-
-        this.musicMaster = this.audioCtx.createGain();
-        this.musicMaster.gain.value = 0.0;
-
-        this.musicDry = this.audioCtx.createGain();
-        this.musicDry.gain.value = 0.75;
-
-        this.musicReverbSend = this.audioCtx.createGain();
-        this.musicReverbSend.gain.value = 0.35;
-
-        this.musicCompressor = this.audioCtx.createDynamicsCompressor();
-        this.musicCompressor.threshold.value = -26;
-        this.musicCompressor.knee.value = 18;
-        this.musicCompressor.ratio.value = 2.2;
-        this.musicCompressor.attack.value = 0.02;
-        this.musicCompressor.release.value = 0.45;
-
-        this.musicReverb = this.audioCtx.createConvolver();
-        this.musicReverb.buffer = this._createImpulseResponse(3.2, 2.2);
-
-        this.musicDry.connect(this.musicMaster);
-        this.musicReverbSend.connect(this.musicReverb).connect(this.musicMaster);
-        this.musicMaster.connect(this.musicCompressor).connect(this.audioCtx.destination);
-    }
-
-    _createImpulseResponse(seconds, decay) {
-        const rate = this.audioCtx.sampleRate;
-        const length = Math.floor(rate * seconds);
-        const impulse = this.audioCtx.createBuffer(2, length, rate);
-        for (let ch = 0; ch < 2; ch++) {
-            const data = impulse.getChannelData(ch);
-            for (let i = 0; i < length; i++) {
-                const t = i / length;
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+export function getParams() {
+    const params = {
+        formaHoja: document.getElementById('p-forma') ? document.getElementById('p-forma').getAttribute('data-value') : 'ovalada',
+        tipoFlora: document.getElementById('p-flora') ? document.getElementById('p-flora').getAttribute('data-value') : 'ninguno',
+    };
+    PARAMETROS_MOTOR.forEach(p => {
+        let el = document.getElementById(p.id);
+        if(el) {
+            let rawVal = el.value;
+            if (p.id === 'p-branch' || p.id === 'p-acc' || p.id === 'p-viento' || p.id === 'p-lenVar') {
+                params[p.key] = parseFloat(rawVal) / 100;
+            } else {
+                params[p.key] = parseFloat(rawVal);
             }
         }
-        return impulse;
+    });
+    return params;
+}
+
+function actualizarUI(id, valor, triggerSave = true) {
+    let el = document.getElementById(id);
+    if(!el) return;
+    if(el.classList.contains('cyclic-btn')) {
+        let state = ESTADO_CICLICO[id];
+        let newIndex = state.opciones.findIndex(o => o.id === valor);
+        if(newIndex !== -1) {
+            state.index = newIndex;
+            el.setAttribute('data-value', valor);
+            el.innerHTML = `${state.prefix}: <span>${state.opciones[newIndex].nombre}</span>`;
+        }
+    } else {
+        el.value = valor;
+        el.dispatchEvent(new Event('input'));
+    }
+    if(triggerSave) guardarAjustes();
+}
+
+const updatePot = () => {
+    let elForma = document.getElementById('p-maceta-forma');
+    let elColor = document.getElementById('p-maceta-color');
+    if(elForma && elColor) {
+        entornoMotor.renderizarMaceta(elForma.getAttribute('data-value'), elColor.getAttribute('data-value'));
+    }
+};
+
+// --- CALIBRACIÓN DE MUTACIÓN PARA ÁRBOLES FRONDOSOS ---
+function ejecutarMutacion() {
+    if (isDying) return;
+    iniciarMuerte(() => {
+        const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
+        const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
+        const fHoja = DICCIONARIO_BOTANICO.hojas[Math.floor(Math.random() * DICCIONARIO_BOTANICO.hojas.length)].id;
+        
+        // Reducimos las posibilidades de que un árbol nazca "sin flora" (solo 10% de probabilidad)
+        let poolFlora = DICCIONARIO_BOTANICO.flora;
+        if (Math.random() > 0.10) poolFlora = poolFlora.filter(f => f.id !== 'ninguno');
+        const tFlora = poolFlora[Math.floor(Math.random() * poolFlora.length)].id;
+        
+        actualizarUI('p-maceta-forma', fMaceta, false);
+        actualizarUI('p-maceta-color', cMaceta, false);
+        actualizarUI('p-forma', fHoja, false);
+        actualizarUI('p-flora', tFlora, false);
+        
+        actualizarUI('p-viento', Math.floor(Math.random() * 50 + 10), false);
+        
+        // CLAVE 1: Edad de ramificación más rápida (1.2 a 2.6). Forma la estructura antes de morir.
+        actualizarUI('p-edadRam', (Math.random() * 1.4 + 1.2).toFixed(1), false);
+        
+        actualizarUI('p-length', Math.floor(Math.random() * 15 + 12), false); 
+        actualizarUI('p-lenVar', Math.floor(Math.random() * 50 + 10), false); 
+        actualizarUI('p-angle', Math.floor(Math.random() * 45 + 25), false);
+        
+        // CLAVE 2: Alta probabilidad de ramificación para evitar palos pelados (65% a 95%)
+        actualizarUI('p-branch', Math.floor(Math.random() * 30 + 65), false); 
+        actualizarUI('p-acc', Math.floor(Math.random() * 40 + 20), false); 
+        actualizarUI('p-gen', Math.floor(Math.random() * 2 + 4), false); 
+        
+        // CLAVE 3: Follaje denso (10 a 30 hojas por brote garantizadas)
+        actualizarUI('p-hojas', Math.floor(Math.random() * 20 + 10), false); 
+        
+        // CLAVE 4: Floración temprana (Año 2 a 3). Garantiza que salgan antes del reseteo del año 18.
+        actualizarUI('p-flor', Math.floor(Math.random() * 2 + 2), false); 
+        
+        let inputSemilla = document.getElementById('input-semilla');
+        if(inputSemilla) inputSemilla.value = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        updatePot(); guardarAjustes(); inicializarArbol();
+    });
+}
+
+function iniciarMuerte(callbackRenacer) {
+    if (!arbolBase || isDying) {
+        if (callbackRenacer) callbackRenacer();
+        return;
+    }
+    
+    isDying = true;
+    zenPausa = true;
+
+    if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+
+    let hojasF = []; let ramasPorGen = {}; let maxGenActual = 0;
+
+    function clasificar(rama) {
+        maxGenActual = Math.max(maxGenActual, rama.gen);
+        if (!ramasPorGen[rama.gen]) ramasPorGen[rama.gen] = [];
+
+        rama.brotes.forEach(b => {
+            b.hojas.forEach(h => {
+                let tr = h.dom.getAttribute('transform');
+                if(tr) {
+                    let m = tr.match(/translate\(([^,]+),\s*([^)]+)\)\s*rotate\(([^)]+)\)\s*scale\(([^)]+)\)/);
+                    if(m) {
+                        hojasF.push({
+                            dom: h.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
+                            vx: (Math.random() - 0.5) * 1.5, vy: Math.random() * 0.5, fallTime: 0,
+                            startOpacity: parseFloat(h.dom.getAttribute('opacity') || 1)
+                        });
+                    }
+                }
+            });
+            b.tallo.style.display = 'none'; 
+        });
+
+        rama.flora.forEach(f => {
+            let tr = f.dom.getAttribute('transform');
+            if(tr) {
+                let m = tr.match(/translate\(([^,]+),\s*([^)]+)\)\s*rotate\(([^)]+)\)\s*scale\(([^)]+)\)/);
+                if(m) {
+                    hojasF.push({
+                        dom: f.dom, x: parseFloat(m[1]), y: parseFloat(m[2]), rot: parseFloat(m[3]), scale: parseFloat(m[4]),
+                        vx: (Math.random() - 0.5) * 1.5, vy: Math.random() * 0.5, fallTime: 0,
+                        startOpacity: parseFloat(f.dom.getAttribute('opacity') || 1)
+                    });
+                }
+            }
+        });
+
+        let obj = { dom: rama.g, path: rama.path, joints: [rama.jointBase, rama.jointTip], x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -0.5, cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2, colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false, isBroken: false, isEarlySplintered: false, ramaRef: rama };
+        ramasPorGen[rama.gen].push(obj); rama.hijos.forEach(clasificar);
     }
 
-    reseedMusicEngine(seedString) {
-        let num = 0;
-        for (let i = 0; i < seedString.length; i++) num += seedString.charCodeAt(i);
-        const possibleRoots = [196.00, 220.00, 261.63, 293.66]; 
-        this.rootHz = possibleRoots[num % possibleRoots.length];
-        this._randomizeSessionIdentity();
+    clasificar(arbolBase); arbolBase = null; 
+
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; }
     }
 
-    _randomizeSessionIdentity() {
-        this.sessionMood.activity = 0.22 + Math.random() * 0.22;       
-        this.sessionMood.brightness = 0.18 + Math.random() * 0.18;     
-        this.sessionMood.ghostVoiceChance = 0.14 + Math.random() * 0.18;
-        this.sessionMood.phraseNoteMax = Math.random() > 0.5 ? 2 : 3;
-        this.currentDegree = 0;
-        this.currentRegister = Math.random() > 0.7 ? 0 : 1;
+    shuffle(hojasF);
+    hojasF.forEach((h, i) => {
+        let pct = i / hojasF.length;
+        if (pct < 0.33) h.fallTime = Math.random() * 300;           
+        else if (pct < 0.66) h.fallTime = 800 + Math.random() * 300;  
+        else h.fallTime = 1600 + Math.random() * 300;                 
+    });
+
+    let ramasFlat = []; let tronco = []; let fallTimeCursor = 2500; let primerQuiebreTime = 0; 
+    
+    for (let g = maxGenActual; g >= 0; g--) {
+        if (ramasPorGen[g]) {
+            if (g <= 2) { tronco.push(...ramasPorGen[g]); } 
+            else {
+                ramasPorGen[g].forEach(r => {
+                    r.fallTime = fallTimeCursor + Math.random() * 150;
+                    r.breakTime = r.fallTime - 400; 
+                    ramasFlat.push(r);
+                });
+                if (primerQuiebreTime === 0) primerQuiebreTime = fallTimeCursor;
+                fallTimeCursor += 500; 
+                if (audioMotor.sfxEnabled) {
+                    let audioTime = fallTimeCursor - 400; 
+                    setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), Math.max(0, audioTime));
+                }
+            }
+        }
+    }
+    
+    if (primerQuiebreTime === 0) primerQuiebreTime = 2500; 
+    let trunkTime = fallTimeCursor + 400; let todasLasRamas = [...ramasFlat, ...tronco]; 
+    let startTime = performance.now();
+    let basePotY = entornoMotor.macetaActual ? entornoMotor.macetaActual.baseY : 35;
+    let groundY = basePotY + 10; 
+
+    function loopMuerte(now) {
+        let elapsed = now - startTime; let completado = true;
+
+        todasLasRamas.forEach(r => {
+            if (elapsed > 50 && !r.isEarlySplintered && r.ramaRef.gen < maxGenActual) {
+                r.isEarlySplintered = true; let ref = r.ramaRef;
+                let dx = ref.endXAct - ref.startX; let dy = ref.endYAct - ref.startY; let len = Math.hypot(dx, dy);
+                if (len > 0) {
+                    let nxDir = dx / len; let nyDir = dy / len;
+                    let currentD = r.path.getAttribute("d");
+                    let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
+                    let m = currentD.match(regex);
+                    if (m) {
+                        let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]); let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]); let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]); let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]); let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]); let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
+                        let vtipX = px2 - px1; let vtipY = py2 - py1; let rFin = ref.grosorPuntaAct / 2; let spikeLen = rFin * 1.5; 
+                        let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                        let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4); let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                        let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                        let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
+                        r.path.setAttribute("d", newD); r.joints[1].style.display = 'none'; 
+                    }
+                }
+            }
+        });
+
+        hojasF.forEach(p => {
+            if (p.dom.style.display !== 'none') {
+                completado = false;
+                if (elapsed > p.fallTime) {
+                    let age = elapsed - p.fallTime; 
+                    p.vy += 0.03; p.vx += Math.sin(now * 0.003 + p.y) * 0.05; p.vx *= 0.92; p.vy *= 0.95; p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
+                    let op = p.startOpacity; if (age > 700) op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
+                    p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
+                    p.dom.setAttribute('opacity', op); if (op <= 0) p.dom.style.display = 'none'; 
+                }
+            }
+        });
+
+        ramasFlat.forEach(r => {
+            if (r.dom.style.display !== 'none') {
+                completado = false;
+                if (elapsed > r.breakTime && !r.isBroken) {
+                    r.isBroken = true; let ref = r.ramaRef;
+                    let dx = ref.endXAct - ref.startX; let dy = ref.endYAct - ref.startY; let len = Math.hypot(dx, dy);
+                    if (len > 0) {
+                        let nx = -dy / len; let ny = dx / len; let nxDir = dx / len; let nyDir = dy / len;
+                        let rBase = (ref.grosorBaseAct / 2) * 0.95; let rFin = ref.grosorPuntaAct / 2;
+                        let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase; let bx2 = ref.startX - nx * rBase; let by2 = ref.startY - ny * rBase;
+                        let px1 = ref.endXAct + nx * rFin; let py1 = ref.endYAct + ny * rFin; let px2 = ref.endXAct - nx * rFin; let py2 = ref.endYAct - ny * rFin;
+                        let vtipX = px2 - px1; let vtipY = py2 - py1;
+                        let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*1.2; let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*1.2;
+                        let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*1.2; let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*1.2;
+
+                        let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px1} ${py1}`;
+                        if (ref.gen < maxGenActual) {
+                            let spikeLen = rFin * 1.5;
+                            let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4); let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                            let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            sharpPath += ` L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y}`;
+                        } else { sharpPath += ` L ${ref.endXAct} ${ref.endYAct}`; }
+                        sharpPath += ` L ${px2} ${py2} L ${j1x - nx*rBase} ${j1y - ny*rBase} L ${bx2} ${by2} Z`;
+                        r.path.setAttribute("d", sharpPath); r.joints.forEach(j => j.style.display = 'none');
+                    }
+                }
+                
+                if (elapsed > r.fallTime) {
+                    let age = elapsed - r.fallTime;
+                    if (!r.tocandoSuelo) {
+                        r.vy += 0.6; r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
+                        if (r.y + r.cy > groundY) {
+                            r.y = groundY - r.cy; r.vy *= -0.3; r.vx *= 0.5;
+                            let targetRot = (r.rot > 0) ? 90 : -90; r.rot += (targetRot - r.rot) * 0.2;
+                            if (Math.abs(r.vy) < 1.0) r.tocandoSuelo = true;
+                        }
+                    }
+                    let op = 1; if (age > 800) op = Math.max(0, 1 - (age - 800) / 400);
+                    r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
+                    r.dom.setAttribute('opacity', op); if (op <= 0) r.dom.style.display = 'none';
+                }
+            }
+        });
+
+        if (elapsed > trunkTime) {
+            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
+            tronco.forEach(r => {
+                if (r.dom.style.display !== 'none') {
+                    completado = false; let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                    if (match) {
+                        let rFill = Math.max(15, match[1] * (1 - pProgreso)); let gFill = Math.max(15, match[2] * (1 - pProgreso)); let bFill = Math.max(15, match[3] * (1 - pProgreso));
+                        let newColor = `rgb(${rFill},${gFill},${bFill})`; 
+                        r.path.setAttribute('fill', newColor); r.joints[0].setAttribute('fill', newColor); 
+                    }
+                }
+            });
+            if (elapsed > trunkTime + 1000) {
+                let opFinal = 1 - ((elapsed - (trunkTime + 1000)) / 800); 
+                domContext.layerTree.setAttribute('opacity', Math.max(0, opFinal));
+                if (opFinal <= 0) tronco.forEach(r => r.dom.style.display = 'none');
+            }
+        } else {
+            if (tronco.length > 0) completado = false; 
+        }
+
+        if (!completado) {
+            deathFrameId = requestAnimationFrame(loopMuerte);
+        } else {
+            isDying = false; if (callbackRenacer) callbackRenacer(); 
+        }
+    }
+    deathFrameId = requestAnimationFrame(loopMuerte);
+}
+
+// --- UTILIDADES ---
+async function solicitarWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+    } catch (err) { }
+}
+
+function liberarWakeLock() { if (wakeLock !== null) { wakeLock.release(); wakeLock = null; } }
+document.addEventListener('visibilitychange', async () => { if (wakeLock === null && document.visibilityState === 'visible' && isZenMode) solicitarWakeLock(); });
+
+function arrancarAudioSilencioso() {
+    if (audioMotor && audioMotor.audioCtx && audioMotor.audioCtx.state === 'suspended') {
+        audioMotor.audioCtx.resume();
+    }
+}
+
+function resetTimerIdle() {
+    document.body.classList.remove('zen-idle');
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(() => { if (isZenMode) document.body.classList.add('zen-idle'); }, 5000);
+}
+
+window.addEventListener('mousemove', (e) => { if (!e.isTrusted) return; arrancarAudioSilencioso(); resetTimerIdle(); });
+window.addEventListener('touchstart', (e) => { if (!e.isTrusted) return; arrancarAudioSilencioso(); resetTimerIdle(); }, { passive: true });
+window.addEventListener('click', (e) => { if (!e.isTrusted) return; arrancarAudioSilencioso(); resetTimerIdle(); });
+
+const btnOpenConfig = document.getElementById('btn-open-config');
+if(btnOpenConfig) btnOpenConfig.addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.add('open'); });
+
+const btnCloseConfig = document.getElementById('btn-close-config');
+if(btnCloseConfig) btnCloseConfig.addEventListener('click', (e) => { e.stopPropagation(); dashboard.classList.remove('open'); });
+
+const btnReset = document.getElementById('btn-reset');
+if(btnReset) btnReset.addEventListener('click', () => { if(!isDying) iniciarMuerte(inicializarArbol); });
+
+const btnStep = document.getElementById('btn-step');
+if(btnStep) {
+    btnStep.addEventListener('click', () => {
+        if(isDying) return;
+        if(isAutoGrowing) {
+            isAutoGrowing = false;
+            if(btnAuto) { btnAuto.classList.remove('active-toggle'); btnAuto.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF'; }
+        }
+        if(arbolBase && iteracionGlobal <= 18) {
+            arbolBase.crecer(1.0, getParams()); iteracionGlobal += 1.0;
+            statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
+            arbolBase.animarYRenderizar(0, tiempoViento, getParams().viento, showLeaves, showFlowers);
+        }
+    });
+}
+
+if(btnAuto) btnAuto.addEventListener('click', (e) => {
+    isAutoGrowing = !isAutoGrowing;
+    if(isAutoGrowing) { e.currentTarget.classList.add('active-toggle'); e.currentTarget.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON'; } 
+    else { e.currentTarget.classList.remove('active-toggle'); e.currentTarget.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF'; }
+});
+
+const btnHojas = document.getElementById('btn-hojas');
+if(btnHojas) btnHojas.addEventListener('click', (e) => { showLeaves = !showLeaves; e.currentTarget.classList.toggle('active-toggle', showLeaves); guardarAjustes(); });
+
+const btnFlores = document.getElementById('btn-flores');
+if(btnFlores) btnFlores.addEventListener('click', (e) => { showFlowers = !showFlowers; e.currentTarget.classList.toggle('active-toggle', showFlowers); guardarAjustes(); });
+
+function syncUI(idPanel, idQuick, activado, iconOn, iconOff, textOn, textOff) {
+    const btnPanel = document.getElementById(idPanel); const btnQuick = document.getElementById(idQuick);
+    if (btnPanel) { btnPanel.classList.toggle('active-toggle', activado); btnPanel.innerHTML = `<span class="material-symbols-rounded">${activado ? iconOn : iconOff}</span> ${activado ? textOn : textOff}`; }
+    if (btnQuick) { btnQuick.classList.toggle('active', activado); btnQuick.innerHTML = `<span class="material-symbols-rounded">${activado ? iconOn : iconOff}</span>`; }
+}
+
+const toggleFondo = () => {
+    const estado = entornoMotor.ciclarEntorno();
+    let activado = estado !== 0; let textOn = 'CIELO: OFF'; let iconOn = 'image'; 
+    if (estado === 1) { textOn = 'CIELO: NORM'; iconOn = 'cloud'; }
+    if (estado === 2) { textOn = 'CIELO: COL'; iconOn = 'palette'; }
+    if (estado === 3) { textOn = 'CIELO: LLUV'; iconOn = 'rainy'; }
+    syncUI('btn-fondo', 'btn-fondo-quick', activado, iconOn, 'image', textOn, 'CIELO: OFF');
+    guardarAjustes();
+};
+
+const toggleMusic = () => {
+    const activado = audioMotor.toggleMusic();
+    syncUI('btn-music', 'btn-music-quick', activado, 'music_note', 'music_off', 'MÚSICA: ON', 'MÚSICA: OFF');
+    guardarAjustes();
+};
+
+const toggleSfx = () => {
+    const activado = audioMotor.toggleSfx();
+    syncUI('btn-sfx', 'btn-sfx-quick', activado, 'volume_up', 'volume_off', 'SFX: ON', 'SFX: OFF');
+    guardarAjustes();
+};
+
+const btnFondo = document.getElementById('btn-fondo'); const btnFondoQuick = document.getElementById('btn-fondo-quick');
+if (btnFondo) btnFondo.addEventListener('click', toggleFondo); if (btnFondoQuick) btnFondoQuick.addEventListener('click', toggleFondo);
+
+const btnMusic = document.getElementById('btn-music'); const btnMusicQuick = document.getElementById('btn-music-quick');
+if (btnMusic) btnMusic.addEventListener('click', toggleMusic); if (btnMusicQuick) btnMusicQuick.addEventListener('click', toggleMusic);
+
+const btnSfx = document.getElementById('btn-sfx'); const btnSfxQuick = document.getElementById('btn-sfx-quick');
+if (btnSfx) btnSfx.addEventListener('click', toggleSfx); if (btnSfxQuick) btnSfxQuick.addEventListener('click', toggleSfx);
+
+const btnMutarMenu = document.getElementById('btn-mutar');
+if(btnMutarMenu) btnMutarMenu.addEventListener('click', (e) => { 
+    if (e && !e.isTrusted && isDying) return;
+    ejecutarMutacion(); 
+});
+
+if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
+    if (!e.isTrusted) return; 
+    e.stopPropagation(); 
+    isZenMode = !isZenMode;
+    
+    if (isZenMode) {
+        document.body.classList.add('zen-active');
+        btnZenMain.classList.add('active');
+        zenPausa = false;
+        muerteProgramada = false; 
+        
+        isAutoGrowing = true;
+        if(btnAuto) {
+            btnAuto.classList.add('active-toggle');
+            btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
+        }
+        
+        if (iteracionGlobal >= 18) { setTimeout(() => { if (!isDying) ejecutarMutacion(); }, 500); }
+        
+        solicitarWakeLock(); resetTimerIdle(); 
+    } else {
+        document.body.classList.remove('zen-active'); document.body.classList.remove('zen-idle');
+        btnZenMain.classList.remove('active'); liberarWakeLock();
+    }
+});
+
+function bucleAnimacion() {
+    tiempoViento += 0.016; 
+    let paramsActuales = getParams();
+    audioMotor.actualizarViento(tiempoViento, paramsActuales.viento * 100);
+    entornoMotor.animarPasto(tiempoViento, paramsActuales.viento);
+
+    if ((isZenMode || isAutoGrowing) && !zenPausa && !isDying && arbolBase) {
+        let deltaZen = 0.015; 
+        arbolBase.crecer(deltaZen, paramsActuales);
+        iteracionGlobal += deltaZen;
+        statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
+
+        if (iteracionGlobal >= 18 && !muerteProgramada) {
+            muerteProgramada = true; 
+            zenPausa = true;
+            
+            if (isZenMode) {
+                setTimeout(() => { if (!isDying && isZenMode) ejecutarMutacion(); }, 3000); 
+            } else {
+                isAutoGrowing = false;
+                if(btnAuto) { btnAuto.classList.remove('active-toggle'); btnAuto.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF'; }
+            }
+        }
     }
 
-    _degreeToFreq(degree, register = 1) {
-        const safeDegree = ((degree % this.scaleRatios.length) + this.scaleRatios.length) % this.scaleRatios.length;
-        const ratio = this.scaleRatios[safeDegree];
-        const reg = this.registerMultipliers[Math.max(0, Math.min(register, this.registerMultipliers.length - 1))];
-        return this.rootHz * ratio * reg;
+    if (arbolBase && !isDying) {
+        arbolBase.animarYRenderizar(0, tiempoViento, paramsActuales.viento, showLeaves, showFlowers);
     }
+    animationFrameId = requestAnimationFrame(bucleAnimacion);
+}
 
-    _weightedNextDegree() {
-        const candidates = [
-            { d: this.currentDegree, w: 0.38 }, { d: this.currentDegree - 1, w: 0.22 }, { d: this.currentDegree + 1, w: 0.22 },         
-            { d: this.currentDegree - 2, w: 0.08 }, { d: this.currentDegree + 2, w: 0.08 }, { d: 0, w: 0.18 }                               
-        ];
-        const total = candidates.reduce((s, c) => s + c.w, 0);
-        let roll = Math.random() * total;
-        for (const c of candidates) { roll -= c.w; if (roll <= 0) return c.d; }
-        return this.currentDegree;
+function inicializarArbol() {
+    updatePot(); 
+    domContext.layerTree.innerHTML = ''; domContext.layerLeaves.innerHTML = ''; domContext.layerFlowers.innerHTML = '';
+    domContext.layerTree.setAttribute('opacity', '1');
+    if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+    
+    let inputSemilla = document.getElementById('input-semilla');
+    if (inputSemilla) {
+        let textoSemilla = inputSemilla.value.trim().toUpperCase();
+        if (!textoSemilla) { textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase(); inputSemilla.value = textoSemilla; }
+        
+        setSeed(textoSemilla);
+        if (audioMotor && typeof audioMotor.reseedMusicEngine === 'function') audioMotor.reseedMusicEngine(textoSemilla);
+        
+        const url = new URL(window.location); url.searchParams.set('seed', textoSemilla); window.history.replaceState({}, '', url);
     }
+    
+    arbolBase = new Rama(0, 0, 0, -90, null, getParams(), domContext);
+    iteracionGlobal = 0; zenPausa = false; muerteProgramada = false; isDying = false;
+    if (statsDisplay) statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
+    bucleAnimacion();
+}
 
-    _maybeShiftRegister() {
-        const r = Math.random();
-        if (r < 0.80) return this.currentRegister;
-        if (r < 0.90) return Math.max(0, this.currentRegister - 1);
-        return Math.min(2, this.currentRegister + 1);
-    }
+window.addEventListener('DOMContentLoaded', () => {
+    construirInterfaz();
+    const urlParams = new URLSearchParams(window.location.search);
+    const semillaURL = urlParams.get('seed');
+    let inputSemilla = document.getElementById('input-semilla');
+    
+    if (semillaURL && inputSemilla) inputSemilla.value = semillaURL.toUpperCase();
+    else cargarAjustes(); 
 
-    _scheduleNote({ time, freq, duration = 6, peak = 0.35, type = 'sine', brightness = 0.24, vibratoAmount = 2.5, vibratoRate = 0.12, reverbSendBoost = 1.0 }) {
-        if (!this.audioCtx || this.audioCtx.state === 'suspended') return;
-        try {
-            const osc = this.audioCtx.createOscillator();
-            const amp = this.audioCtx.createGain();
-            const filter = this.audioCtx.createBiquadFilter();
-
-            osc.type = type;
-            filter.type = 'lowpass';
-            filter.frequency.value = 700 + brightness * 2200; 
-            filter.Q.value = 0.35;
-            amp.gain.value = 0;
-
-            osc.connect(filter).connect(amp);
-            amp.connect(this.musicDry);
-            amp.connect(this.musicReverbSend);
-
-            const lfo = this.audioCtx.createOscillator();
-            const lfoGain = this.audioCtx.createGain();
-            lfo.type = 'sine';
-            lfo.frequency.value = vibratoRate;
-            lfoGain.gain.value = vibratoAmount;
-            lfo.connect(lfoGain).connect(osc.frequency);
-
-            osc.frequency.setValueAtTime(freq, time);
-
-            amp.gain.setValueAtTime(0.0001, time);
-            amp.gain.linearRampToValueAtTime(peak, time + Math.min(2.2, duration * 0.35));
-            amp.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-
-            const baseCutoff = 700 + brightness * 2200;
-            filter.frequency.setValueAtTime(baseCutoff, time);
-            filter.frequency.linearRampToValueAtTime(baseCutoff * 1.08, time + duration * 0.2);
-            filter.frequency.linearRampToValueAtTime(baseCutoff * 0.92, time + duration);
-
-            const originalSend = this.musicReverbSend.gain.value;
-            this.musicReverbSend.gain.setValueAtTime(originalSend * reverbSendBoost, time);
-
-            osc.start(time); lfo.start(time);
-            osc.stop(time + duration + 0.1); lfo.stop(time + duration + 0.1);
-
-            osc.onended = () => { try { osc.disconnect(); filter.disconnect(); amp.disconnect(); lfo.disconnect(); lfoGain.disconnect(); } catch(e){} };
-        } catch(e) {}
-    }
-
-    _scheduleGhostVoice({ time, baseFreq, duration }) {
-        const intervalChoices = [1, 3 / 2, 2]; 
-        const ratio = intervalChoices[Math.floor(Math.random() * intervalChoices.length)];
-        const ghostFreq = baseFreq * ratio;
-
-        this._scheduleNote({
-            time: time + 0.8 + Math.random() * 1.2, freq: ghostFreq,
-            duration: duration * (0.7 + Math.random() * 0.5),
-            peak: 0.12, type: 'triangle', brightness: this.sessionMood.brightness * 0.9,
-            vibratoAmount: 1.2, vibratoRate: 0.08, reverbSendBoost: 1.25
+    let btnCopiar = document.getElementById('btn-copiar-semilla');
+    if (btnCopiar) {
+        btnCopiar.addEventListener('click', () => {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                btnCopiar.innerHTML = '<span class="material-symbols-rounded">check</span>'; setTimeout(() => btnCopiar.innerHTML = '<span class="material-symbols-rounded">content_copy</span>', 2000);
+            });
         });
     }
 
-    _schedulePhrase(startTime) {
-        const noteCount = Math.floor(Math.random() * (this.sessionMood.phraseNoteMax - this.sessionMood.phraseNoteMin + 1)) + this.sessionMood.phraseNoteMin;
-        let t = startTime;
-        let firstFreq = null; let lastFreq = null;
+    inicializarArbol();
+    
+    isZenMode = true; document.body.classList.add('zen-active'); document.body.classList.add('zen-idle'); 
+    if(btnZenMain) btnZenMain.classList.add('active');
+    
+    isAutoGrowing = true;
+    if(btnAuto) { btnAuto.classList.add('active-toggle'); btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON'; }
 
-        for (let i = 0; i < noteCount; i++) {
-            this.currentDegree = this._weightedNextDegree();
-            this.currentRegister = this._maybeShiftRegister();
-            if (Math.random() < 0.20) { this.currentDegree = 0; if (Math.random() < 0.8) this.currentRegister = 1; }
+    const btnFondoMenu = document.getElementById('btn-fondo');
+    if (btnFondoMenu && !btnFondoMenu.classList.contains('active-toggle')) toggleFondo(); 
+    
+    const btnMusMenu = document.getElementById('btn-music');
+    if (btnMusMenu && !btnMusMenu.classList.contains('active-toggle')) toggleMusic(); 
+    
+    const btnSfxMenu = document.getElementById('btn-sfx');
+    if (btnSfxMenu && !btnSfxMenu.classList.contains('active-toggle')) toggleSfx(); 
+    
+    solicitarWakeLock();
+});
 
-            const freq = this._degreeToFreq(this.currentDegree, this.currentRegister);
-            const duration = 4.8 + Math.random() * 4.5;
-            const peak = 0.25 + Math.random() * 0.15; 
-            const type = Math.random() < 0.85 ? 'sine' : 'triangle';
-
-            this._scheduleNote({ time: t, freq, duration, peak, type, brightness: this.sessionMood.brightness, vibratoAmount: 1.5 + Math.random() * 1.8, vibratoRate: 0.07 + Math.random() * 0.08, reverbSendBoost: 1.0 + Math.random() * 0.2 });
-
-            if (firstFreq == null) firstFreq = freq;
-            lastFreq = freq;
-            t += 2.2 + Math.random() * 3.8;
-        }
-
-        if (Math.random() < this.sessionMood.ghostVoiceChance && firstFreq) {
-            this._scheduleGhostVoice({ time: startTime, baseFreq: Math.random() < 0.5 ? firstFreq : lastFreq, duration: 5 + Math.random() * 3 });
-        }
-
-        const phraseDuration = t - startTime;
-        const silence = (6 + Math.random() * 10) + (noteCount > 1 ? (noteCount - 1) * (2 + Math.random() * 2) : 0);
-        this.lastPhraseEndedAt = startTime + phraseDuration + silence;
-
-        return this.lastPhraseEndedAt;
-    }
-
-    _zenLoop = () => {
-        if (!this.musicEnabled) return;
-        
-        if (this.audioCtx.state === 'suspended') {
-            this.zenTimeoutId = setTimeout(this._zenLoop, 500);
-            return;
-        }
-
-        try {
-            const now = this.audioCtx.currentTime;
-            const start = Math.max(now + 0.05, this.lastPhraseEndedAt || now + 0.05);
-
-            const drift = (v, amt, min, max) => Math.max(min, Math.min(max, v + (Math.random() * 2 - 1) * amt));
-            this.sessionMood.activity = drift(this.sessionMood.activity, 0.035, 0.18, 0.45);
-            this.sessionMood.brightness = drift(this.sessionMood.brightness, 0.03, 0.15, 0.38);
-            this.sessionMood.ghostVoiceChance = drift(this.sessionMood.ghostVoiceChance, 0.03, 0.08, 0.28);
-
-            const nextEnd = this._schedulePhrase(start);
-            const delayMs = Math.max(1000, (nextEnd - this.audioCtx.currentTime - 1.0) * 1000);
-            this.zenTimeoutId = setTimeout(this._zenLoop, delayMs);
-        } catch (e) {
-            this.zenTimeoutId = setTimeout(this._zenLoop, 5000);
-        }
-    }
-
-    startZenMusic() {
-        if (!this.audioCtx) return;
-        const t = this.audioCtx.currentTime;
-        this.musicMaster.gain.cancelScheduledValues(t);
-        this.musicMaster.gain.setTargetAtTime(0.8, t, 1.0); 
-
-        this.lastPhraseEndedAt = this.audioCtx.currentTime + 1.0 + Math.random() * 4.0;
-        this._zenLoop();
-    }
-
-    stopZenMusic() {
-        clearTimeout(this.zenTimeoutId);
-        if (!this.audioCtx || !this.musicMaster) return;
-
-        const t = this.audioCtx.currentTime;
-        this.musicMaster.gain.cancelScheduledValues(t);
-        this.musicMaster.gain.setTargetAtTime(0.0, t, 0.5);
-    }
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('PWA Error', err));
+    });
 }

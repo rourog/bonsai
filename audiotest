@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratorio de Audio Zen</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #1a1a1a;
+            color: #eeeeee;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            margin: 0;
+        }
+        h1 {
+            color: #7A9E7E;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+        button {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        button:hover:not(:disabled) {
+            background-color: #444;
+            border-color: #7A9E7E;
+            transform: translateY(-2px);
+        }
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        #btn-power {
+            background-color: #D48C70;
+            border-color: #D48C70;
+            color: #111;
+            font-weight: bold;
+            width: 100%;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+        #btn-power.on {
+            background-color: #7A9E7E;
+            border-color: #7A9E7E;
+        }
+        .note {
+            font-size: 12px;
+            color: #888;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎛️ Laboratorio de Audio</h1>
+
+    <div class="container">
+        <button id="btn-power">🔌 ENCENDER MOTOR (Click Aquí Primero)</button>
+
+        <div class="grid">
+            <button class="sfx-btn" id="btn-pop" disabled>🌸 Pop (Nace Flor)</button>
+            <button class="sfx-btn" id="btn-rama" disabled>🪵 Rama Seca</button>
+            <button class="sfx-btn" id="btn-ave" disabled>🐦 Trino de Ave</button>
+            <button class="sfx-btn" id="btn-pez" disabled>🐟 Salto de Pez</button>
+            <button class="sfx-btn" id="btn-campana" disabled>🎐 Campana de Viento</button>
+            <button class="sfx-btn" id="btn-carpintero" disabled>🪓 Pájaro Carpintero</button>
+            <button class="sfx-btn" id="btn-nota" disabled style="grid-column: 1 / -1; background-color: #2c3e50;">🎵 Nota Pentatónica (Cuenco)</button>
+        </div>
+        
+        <div class="note">Asegúrate de estar corriendo este archivo en un servidor local (Ej. Live Server) para que los módulos ES6 funcionen.</div>
+    </div>
+
+    <script type="module">
+        import { MotorAudio } from './MotorAudio.js';
+        
+        const audio = new MotorAudio();
+        const btnPower = document.getElementById('btn-power');
+        const sfxBtns = document.querySelectorAll('.sfx-btn');
+
+        // Inicialización
+        btnPower.addEventListener('click', () => {
+            // 1. Despertamos el AudioContext
+            audio.initCtx();
+            if (audio.audioCtx.state === 'suspended') {
+                audio.audioCtx.resume();
+            }
+            
+            // 2. Engañamos a las banderas internas para permitir los sonidos aislados
+            audio.sfxEnabled = true;
+            audio.musicEnabled = true;
+
+            // 3. Actualizamos UI
+            btnPower.classList.add('on');
+            btnPower.textContent = "🟢 MOTOR EN LÍNEA Y ESCUCHANDO";
+            btnPower.disabled = true;
+
+            sfxBtns.forEach(btn => btn.disabled = false);
+        });
+
+        // Helper para obtener el tiempo exacto del reloj de audio
+        const t = () => audio.audioCtx.currentTime;
+
+        // Disparadores
+        document.getElementById('btn-pop').addEventListener('click', () => {
+            audio.playPop();
+        });
+
+        document.getElementById('btn-rama').addEventListener('click', () => {
+            audio.playRamaSeca(t());
+        });
+
+        document.getElementById('btn-ave').addEventListener('click', () => {
+            audio.playAve(t());
+        });
+
+        document.getElementById('btn-pez').addEventListener('click', () => {
+            audio.playPezSplash(t());
+        });
+
+        document.getElementById('btn-campana').addEventListener('click', () => {
+            audio.playCampanaViento(t());
+        });
+
+        document.getElementById('btn-carpintero').addEventListener('click', () => {
+            audio.playCarpintero(t());
+        });
+
+        document.getElementById('btn-nota').addEventListener('click', () => {
+            // Seteamos una semilla aleatoria para que cambie la tonalidad a veces
+            audio.reseedMusicEngine(Math.random().toString(36).substring(7));
+            audio._playZenNote(t());
+        });
+
+    </script>
+</body>
+</html>

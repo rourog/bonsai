@@ -3,163 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Bonsái Paramétrico - Experiencia Zen Completa</title>
-    <style>
-        :root {
-            --bg-color: #f5f5f7;
-            --ui-text: #333;
-            --ui-bg: #ffffff;
-            --border: #d1d1d6;
-        }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100vh; background-color: var(--bg-color); font-family: 'SF Mono', 'Roboto Mono', Menlo, monospace; overflow: hidden; transition: background-color 1s ease; }
-        
-        /* --- FONDO CIELO --- */
-        #sky-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, #a1c4fd 0%, #ffffff 80%); opacity: 0; transition: opacity 1s ease; z-index: 0; pointer-events: none; }
-        body.bg-sky-active #sky-bg { opacity: 1; }
-        
-        /* --- CONTENEDORES PRINCIPALES --- */
-        #app-container { display: flex; flex-direction: row; width: 100%; height: 100vh; position: relative; z-index: 1; }
-        #canvas-container { flex-grow: 1; position: relative; height: 100vh; display: flex; justify-content: center; align-items: center; transition: padding 0.5s ease; }
-        svg { width: 100%; height: 100%; display: block; z-index: 2; position: relative;}
-        
-        .rama-activa { cursor: crosshair; } .rama-activa:hover { opacity: 0.7; }
-        .brote-activo { cursor: crosshair; } .brote-activo:hover path { fill: #e67e22 !important; }
-        .flora-activa { cursor: crosshair; } .flora-activa:hover path { fill: #e74c3c !important; }
-        
-        /* --- UI FLOTANTE MINIMALISTA (CORREGIDO PARA MÓVILES) --- */
-        #floating-ui { 
-            position: absolute; 
-            /* Aumentamos a 60px y añadimos el safe-area para protegerlo de la barra de Android/iOS */
-            bottom: max(60px, env(safe-area-inset-bottom)); 
-            left: 25px; right: 25px; 
-            display: flex; justify-content: space-between; align-items: flex-end; 
-            z-index: 10; pointer-events: none; 
-            transition: opacity 0.5s ease, transform 0.5s ease; 
-            transform: translateY(0);
-        }
-        #floating-ui > * { pointer-events: auto; }
-        
-        body.zen-active.zen-idle #floating-ui { opacity: 0; pointer-events: none; transform: translateY(20px); }
+    <title>Bonsai Zen - Estudio Paramétrico</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" />
+    
+    <link rel="stylesheet" href="estilos.css">
 
-        .btn-zen-main { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%); color: white; font-size: 0.9rem; font-weight: bold; font-family: inherit; letter-spacing: 1px; border: none; box-shadow: 0 4px 15px rgba(102, 166, 255, 0.4); cursor: pointer; display: flex; justify-content: center; align-items: center; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s; position: relative; overflow: hidden; }
-        .btn-zen-main:active { transform: scale(0.92); }
-        .btn-zen-main::after { content: ''; position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: rgba(255, 255, 255, 0.6); border-radius: 50%; transform: translate(-50%, -50%) scale(0); opacity: 0; pointer-events: none; }
-        .btn-zen-main.active::after { animation: inner-ripple-zen 2.5s infinite; }
-        @keyframes inner-ripple-zen { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 10% { opacity: 1; } 80% { transform: translate(-50%, -50%) scale(10); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(10); opacity: 0; } }
-        
-        .btn-config { background: rgba(255, 255, 255, 0.9); border: 1px solid var(--border); width: 45px; height: 45px; border-radius: 50%; font-size: 1.4rem; display: flex; justify-content: center; align-items: center; color: var(--ui-text); cursor: pointer; backdrop-filter: blur(5px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); transition: opacity 0.5s, transform 0.2s; padding-bottom: 2px; }
-        .btn-config:active { transform: scale(0.9); }
-        
-        /* --- DASHBOARD COMPACTADO --- */
-        #dashboard { width: 320px; min-width: 320px; height: 100vh; background: rgba(255, 255, 255, 0.98); border-left: 1px solid var(--border); padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: 0.8rem; overflow-y: auto; box-sizing: border-box; z-index: 20; backdrop-filter: blur(15px); margin-right: 0; transition: margin-right 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
-        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; }
-        .btn-close { background: transparent; border: none; font-size: 1.5rem; color: var(--ui-text); cursor: pointer; padding: 0; line-height: 1; display: none; }
-        
-        .actions, .presets { display: flex; justify-content: center; gap: 0.4rem; flex-wrap: wrap; }
-        button.action-btn { background: transparent; border: 1px solid var(--ui-text); color: var(--ui-text); padding: 0.3rem 0.8rem; font-family: inherit; font-size: 0.7rem; cursor: pointer; text-transform: uppercase; transition: all 0.2s; flex-grow: 1; border-radius: 4px; }
-        button.action-btn:hover { background: var(--ui-text); color: var(--ui-bg); }
-        button.primary { background: var(--ui-text); color: var(--ui-bg); font-weight: bold; }
-        button.primary:hover { background: transparent; color: var(--ui-text); }
-        button.active-toggle { background: #e0e0e0; color: #000; font-weight: bold; }
-        
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        button.cyclic-btn { font-size: 0.65rem; padding: 0.4rem 0.2rem; text-align: center; border-color: #aaa; background: #fafafa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-        button.cyclic-btn span { font-weight: bold; color: var(--ui-text); }
-        button.cyclic-btn:hover { background: #e8e8e8; color: var(--ui-text); border-color: #777;}
-        
-        button.preset-btn { border-color: #aaa; color: #555; padding: 0.2rem 0.4rem; font-size: 0.65rem; border-radius: 4px; background: transparent; cursor: pointer; font-family: inherit; transition: 0.2s;}
-        button.preset-btn:hover { background: rgba(0,0,0,0.05); border-color: #333; color: #333;}
-        
-        .parameters { display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.7rem; margin-top: 0.2rem; }
-        .control-group { display: flex; flex-direction: column; gap: 0.1rem; }
-        .control-group label { display: flex; justify-content: space-between; color: var(--ui-text); font-weight: bold; }
-        input[type="range"] { width: 100%; cursor: pointer; height: 4px; margin: 4px 0; }
-        
-        #stats { position: absolute; top: 15px; left: 20px; font-size: 0.7rem; color: #aaa; z-index: 5; transition: opacity 0.5s; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-        body.zen-idle #stats { opacity: 0; } 
-        
-        /* --- RESPONSIVIDAD --- */
-        @media (min-width: 769px) { 
-            .btn-config { display: none; } 
-            body.zen-active #dashboard { margin-right: -320px; }
+    <style>
+        #viewport {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: #FAF9F6; /* Fondo Blanco Papel */
+            overflow: hidden;
         }
-        @media (max-width: 768px) {
-            #app-container { flex-direction: column; }
-            #canvas-container { position: absolute; width: 100%; }
-            #dashboard { position: fixed; top: 0; right: -100%; width: 85%; max-width: 320px; box-shadow: -5px 0 25px rgba(0,0,0,0.15); transition: right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); margin-right: 0 !important; }
-            #dashboard.open { right: 0; }
-            .btn-close { display: block; } 
+
+        #sky-bg {
+            position: absolute;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        #bonsai-canvas {
+            position: absolute;
+            width: 100%; height: 100%;
+            z-index: 5;
+            display: flex;
+            align-items: flex-end; 
+            justify-content: center;
+            /* Espacio optimizado para la maceta cerca del margen inferior */
+            padding-bottom: calc(10vh + env(safe-area-inset-bottom, 0px));
+            box-sizing: border-box;
+            transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        /* Desplazamiento del bonsái al abrir el menú en escritorio */
+        @media (min-width: 769px) {
+            body:has(#dashboard.open) #bonsai-canvas {
+                transform: translateX(-150px);
+            }
+        }
+
+        svg {
+            width: 100%; 
+            max-height: 85vh; 
+            overflow: visible;
         }
     </style>
 </head>
 <body>
 
-    <div id="sky-bg"></div>
+    <div id="viewport">
+        <div id="sky-bg"></div>
 
-    <div id="app-container">
-        
-        <div id="canvas-container">
-            <div id="stats">NODOS: 1 | AÑOS: 0.0</div>
-            <svg id="bonsai-svg" viewBox="-250 -485 500 500">
-                <g id="layer-pot"></g>
+        <div id="bonsai-canvas">
+            <svg viewBox="-200 -380 400 430" preserveAspectRatio="xMidYMax meet">
+                <g id="layer-pot" transform="translate(0, 0)"></g>
                 <g id="layer-tree"></g>
                 <g id="layer-leaves"></g>
                 <g id="layer-flowers"></g>
             </svg>
-
-            <div id="floating-ui">
-                <button id="btn-zen-main" class="btn-zen-main">ZEN</button>
-                <button id="btn-open-config" class="btn-config">⚙️</button>
-            </div>
         </div>
 
-        <div id="dashboard">
-            <div class="dashboard-header">
-                <span class="section-title" style="border: none; margin: 0; color: #333; font-size: 0.85rem;">AJUSTES DEL MOTOR</span>
-                <button id="btn-close-config" class="btn-close">&times;</button>
-            </div>
+        <div id="stats">CARGANDO...</div>
 
-            <div class="actions">
-                <button id="btn-reset" class="action-btn">Semilla</button>
-                <button id="btn-mutar" class="action-btn primary">Mutar</button>
-            </div>
-
-            <div class="actions">
-                <button id="btn-step" class="action-btn" style="border-color: #2ecc71; color: #2ecc71;">+1 Etapa</button>
-                <button id="btn-auto" class="action-btn" style="border-color: #2ecc71; color: #2ecc71;">Auto-Crecer: OFF</button>
-            </div>
-
-            <div class="actions">
-                <button id="btn-hojas" class="action-btn active-toggle">Hojas</button>
-                <button id="btn-flores" class="action-btn active-toggle">Flora</button>
-            </div>
-
-            <div class="actions">
-                <button id="btn-sfx" class="action-btn" style="border-color: #e67e22; color: #e67e22;">🍃 SFX: OFF</button>
-                <button id="btn-music" class="action-btn" style="border-color: #3498db; color: #3498db;">🎵 MÚSICA: OFF</button>
-                <button id="btn-fondo" class="action-btn" style="border-color: #89f7fe; color: #3498db;">🌅 CIELO: OFF</button>
-            </div>
-
-            <div class="section-title" style="margin-top: 0.5rem;">PRESETS</div>
-            <div class="presets">
-                <button class="preset-btn" onclick="aplicarPreset('pino')">Pino</button>
-                <button class="preset-btn" onclick="aplicarPreset('roble')">Roble</button>
-                <button class="preset-btn" onclick="aplicarPreset('arbusto')">Arbusto</button>
-                <button class="preset-btn" onclick="aplicarPreset('cipres')">Ciprés</button>
-                <button class="preset-btn" onclick="aplicarPreset('cerezo')" style="border-color: #e8a0bf; color: #b76e8d;">Cerezo</button>
-                <button class="preset-btn" onclick="aplicarPreset('limonero')" style="border-color: #f1c40f; color: #b7950b;">Limonero</button>
-            </div>
-
-            <div class="section-title" style="margin-top: 0.5rem;">CONFIGURACIÓN FÍSICA</div>
+        <div id="right-controls">
+            <button id="btn-music-quick" class="fab-small" title="Música">
+                <span class="material-symbols-rounded">music_off</span>
+            </button>
+            <button id="btn-sfx-quick" class="fab-small" title="Efectos de Sonido">
+                <span class="material-symbols-rounded">volume_off</span>
+            </button>
             
-            <div id="ui-morfologia"></div>
-            
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 0.5rem 0;">
-            
-            <div id="ui-parametros" class="parameters"></div>
+            <button id="btn-zen-main" title="Modo Zen">
+                <div class="zen-ripple ripple-1"></div>
+                <div class="zen-ripple ripple-2"></div>
+                <div class="zen-ripple ripple-3"></div>
+                <span class="material-symbols-rounded" style="font-size: 32px; position: relative; z-index: 2;">self_improvement</span>
+            </button>
+
+            <button id="btn-fondo-quick" class="fab-small" title="Cielo / Fondo">
+                <span class="material-symbols-rounded">image</span>
+            </button>
+            <button id="btn-open-config" class="fab-small" title="Abrir Ajustes">
+                <span class="material-symbols-rounded">settings</span>
+            </button>
         </div>
+
+        <aside id="dashboard">
+            <div class="panel-header">
+                <h3>Estudio Botánico</h3>
+                <button id="btn-close-config" class="close-btn">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
+            </div>
+
+            <div class="panel-content">
+                <div class="ui-section">
+                    <label class="section-label">IDENTIDAD DEL ÁRBOL</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                        <input type="text" id="input-semilla" placeholder="SEMILLA" maxlength="12">
+                        <button id="btn-copiar-semilla" class="action-btn">
+                            <span class="material-symbols-rounded">content_copy</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ui-section">
+                    <label class="section-label">ESPECIES PREDEFINIDAS</label>
+                    <div class="grid-2">
+                        <button class="action-btn" onclick="aplicarPreset('pino')"><span class="material-symbols-rounded">forest</span> PINO</button>
+                        <button class="action-btn" onclick="aplicarPreset('roble')"><span class="material-symbols-rounded">park</span> ROBLE</button>
+                        <button class="action-btn" onclick="aplicarPreset('cerezo')"><span class="material-symbols-rounded">local_florist</span> CEREZO</button>
+                        <button class="action-btn" onclick="aplicarPreset('limonero')"><span class="material-symbols-rounded">eco</span> LIMÓN</button>
+                        <button class="action-btn" onclick="aplicarPreset('cipres')"><span class="material-symbols-rounded">spa</span> CIPRÉS</button>
+                        <button class="action-btn" onclick="aplicarPreset('arbusto')"><span class="material-symbols-rounded">yard</span> ARBUSTO</button>
+                    </div>
+                </div>
+
+                <div class="ui-section" id="ui-morfologia">
+                    <label class="section-label">DISEÑO Y MACETA</label>
+                </div>
+
+                <div class="ui-section" id="ui-parametros">
+                    <label class="section-label">CRECIMIENTO</label>
+                </div>
+
+                <div class="ui-section">
+                    <label class="section-label">SISTEMA</label>
+                    <div class="grid-2">
+                        <button id="btn-step" class="action-btn"><span class="material-symbols-rounded">skip_next</span> +1 AÑO</button>
+                        <button id="btn-auto" class="action-btn"><span class="material-symbols-rounded">play_arrow</span> AUTO: OFF</button>
+                        <button id="btn-mutar" class="action-btn"><span class="material-symbols-rounded">shuffle</span> MUTAR</button>
+                        <button id="btn-hojas" class="action-btn active-toggle"><span class="material-symbols-rounded">energy_savings_leaf</span> HOJAS</button>
+                        <button id="btn-flores" class="action-btn active-toggle"><span class="material-symbols-rounded">filter_vintage</span> FLORA</button>
+                        <button id="btn-fondo" class="action-btn"><span class="material-symbols-rounded">landscape</span> CIELO</button>
+                        <button id="btn-sfx" class="action-btn"><span class="material-symbols-rounded">volume_up</span> SFX</button>
+                        <button id="btn-music" class="action-btn"><span class="material-symbols-rounded">music_note</span> MÚSICA</button>
+                        <button id="btn-reset" class="action-btn" style="border-color: var(--md-sys-color-secondary); color: var(--md-sys-color-secondary); grid-column: span 2;">
+                            <span class="material-symbols-rounded">restart_alt</span> REPLANTAR
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
     </div>
 
-    <script type="module" src="./main.js?v=4"></script>
+    <script type="module" src="./main.js?v=21"></script>
 </body>
 </html>

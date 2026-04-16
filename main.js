@@ -589,7 +589,7 @@ if(btnReset) btnReset.addEventListener('click', () => {
     iniciarMuerte(inicializarArbol);
 });
 
-// NUEVO: Lógica del botón Paso a Paso (+1 AÑO)
+// Lógica del botón Paso a Paso (+1 AÑO)
 const btnStep = document.getElementById('btn-step');
 if(btnStep) {
     btnStep.addEventListener('click', () => {
@@ -638,6 +638,7 @@ if(btnFlores) btnFlores.addEventListener('click', (e) => {
     e.currentTarget.classList.toggle('active-toggle', showFlowers); 
     guardarAjustes();
 });
+
 
 // --- SINCRONIZADOR VISUAL DE BOTONES (PANEL VS ACCESOS RÁPIDOS) ---
 function syncUI(idPanel, idQuick, activado, iconOn, iconOff, textOn, textOff) {
@@ -692,6 +693,7 @@ const btnSfx = document.getElementById('btn-sfx');
 const btnSfxQuick = document.getElementById('btn-sfx-quick');
 if (btnSfx) btnSfx.addEventListener('click', toggleSfx);
 if (btnSfxQuick) btnSfxQuick.addEventListener('click', toggleSfx);
+
 
 const btnMutar = document.getElementById('btn-mutar');
 if(btnMutar) btnMutar.addEventListener('click', () => {
@@ -898,9 +900,10 @@ window.addEventListener('DOMContentLoaded', () => {
         btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
     }
 
-    let btnFondo = document.getElementById('btn-fondo');
-    if (btnFondo && !btnFondo.classList.contains('active-toggle')) {
-        btnFondo.click(); 
+    // Encendemos el cielo por defecto usando el nuevo controlador sincronizado
+    const btnFondoMenu = document.getElementById('btn-fondo');
+    if (btnFondoMenu && !btnFondoMenu.classList.contains('active-toggle')) {
+        toggleFondo(); 
     }
     
     solicitarWakeLock();

@@ -80,7 +80,7 @@ export function generarPathHoja(forma, w, l) {
 }
 
 export class FrutoFlor {
-    constructor(tipo, ctx) {
+    constructor(tipo, startX, startY, ctx) { // RECIBE LAS COORDENADAS DESDE EL NACIMIENTO
         this.ctx = ctx; 
         this.offsetX = rnd(-15, 15);
         this.offsetY = rnd(-15, 15);
@@ -101,11 +101,18 @@ export class FrutoFlor {
         this.dom.setAttribute("fill", data.fill);
         this.dom.setAttribute("opacity", "0.95");
         this.dom.setAttribute("class", "flora-activa");
+        
+        // APLICACIÓN INMEDIATA DEL TRANSFORM PARA EVITAR EL BUG DE LA PANTALLA (0,0)
+        this.dom.setAttribute("transform", `translate(${startX + this.offsetX}, ${startY + this.offsetY}) scale(0)`);
+        
         this.dom.addEventListener('click', (e) => { e.stopPropagation(); this.cortar(); });
         
         this.ctx.layerFlowers.appendChild(this.dom);
         
-        if(this.ctx.audioMotor) this.ctx.audioMotor.playPop();
+        // Llamada segura al motor de audio
+        if(this.ctx.audioMotor && typeof this.ctx.audioMotor.playPop === 'function') {
+            this.ctx.audioMotor.playPop();
+        }
     }
 
     obtenerDatosMorfologicos(tipo) {
@@ -297,13 +304,15 @@ export class Rama {
             }
         }
 
-        // CORRECCIÓN: La flor ya no nacerá en el punto (0,0) flotante, sino que esperará a que la rama exista físicamente
+        // CORRECCIÓN DE ORIGEN Y DENSIDAD AUMENTADA A 6:
         if (params.tipoFlora !== 'ninguno' && this.lenAct > 2) {
             let esRamaTerminal = this.gen >= params.maxGen - 2;
             let probFlora = 1 - Math.pow(1 - 0.60, delta);
             if (this.age >= params.inicioFloracion && esRamaTerminal) {
-                if (this.flora.length < 4 && seededRandom() < probFlora) {
-                    this.flora.push(new FrutoFlor(params.tipoFlora, this.ctx));
+                if (this.flora.length < 6 && seededRandom() < probFlora) {
+                    let sX = this.endXAct !== undefined ? this.endXAct : this.startX;
+                    let sY = this.endYAct !== undefined ? this.endYAct : this.startY;
+                    this.flora.push(new FrutoFlor(params.tipoFlora, sX, sY, this.ctx));
                 }
             }
         }

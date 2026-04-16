@@ -152,7 +152,6 @@ export class Brote {
         this.y = y;
         
         let anguloDeseado = anguloRama + rnd(-70, 70);
-        // Los brotes mantienen un leve fototropismo vertical para que las hojas se acomoden bien
         this.angulo = anguloDeseado + (-90 - anguloDeseado) * 0.2;
         
         this.longitud = rnd(8, 20);
@@ -234,14 +233,14 @@ export class Rama {
         this.nxMid = 0; this.nyMid = 0;
         this.nxFin = 0; this.nyFin = 0;
         
-        // --- 1. ADN DEL ÁRBOL (Generado solo en el tronco base) ---
+        // --- 1. ADN DEL ÁRBOL ---
         if (this.padre) {
             this.adn = this.padre.adn;
             this.baseBarkColor = this.padre.baseBarkColor;
         } else {
             this.adn = {
-                estilo: seededRandom(), // Define la silueta del árbol (0.0 a 1.0)
-                fuerza: rnd(0.08, 0.25) // Qué tan rápido giran las ramas
+                estilo: seededRandom(), // 0.0 a 1.0 (Silueta principal)
+                fuerza: rnd(0.1, 0.4)   // Elasticidad hacia la luz
             };
             this.baseBarkColor = BARK_PALETTE[Math.floor(this.seed % BARK_PALETTE.length)];
         }
@@ -249,63 +248,81 @@ export class Rama {
         this.startX = startX; 
         this.startY = startY;
         
-        // Normalizamos el ángulo para cálculos matemáticos predecibles
         let anguloNormalizado = anguloInicial;
         while (anguloNormalizado <= -180) anguloNormalizado += 360;
         while (anguloNormalizado > 180) anguloNormalizado -= 360;
         
-        let targetLuz = -90; // Por defecto arriba
+        // ¡LA CLAVE! Respetamos el ángulo inicial de bifurcación para evitar ramas paralelas.
+        // El fototropismo actuará sobre la curvatura más adelante.
+        this.angulo = anguloNormalizado; 
+
+        let targetLuz = -90; 
+        let preferenciaUp = 1.0; 
+        let preferenciaOut = 1.0;
         let bonoLongitud = 1.0;
 
-        // --- 2. CÁLCULO DE ESTRATEGIA DE LUZ Y DOMINANCIA APICAL ---
+        // --- 2. VIGOR ORGÁNICO Y FOTOTROPISMO ---
         if (this.gen > 0) {
-            // Lado: 1 = Derecha de la maceta, -1 = Izquierda de la maceta
             let lado = (anguloNormalizado >= -90 && anguloNormalizado <= 90) ? 1 : -1; 
             
+            // Definir preferencias según el ADN
             if (this.adn.estilo < 0.20) {
-                // ESTILO 1: Cascada / Llorón (20% probabilidad)
-                // Buscan ir hacia abajo. La gravedad domina.
-                targetLuz = -90 + (110 * lado) + (this.gen * 25 * lado); 
-                bonoLongitud = 1.2; // Crecen más largo porque cuelgan
-            } 
-            else if (this.adn.estilo < 0.70) {
-                // ESTILO 2: Ancho / Aparasolado (50% probabilidad)
-                // Se expanden agresivamente hacia los lados del lienzo
-                targetLuz = -90 + (70 * lado);
-                
-                // Bono de dominancia lateral (crecen más si logran ir en horizontal)
-                let esHorizontal = Math.abs(Math.abs(-90 - anguloNormalizado) - 90) < 35; 
-                if (esHorizontal) bonoLongitud = 1.3;
-            } 
-            else {
-                // ESTILO 3: Vertical / Pino (30% probabilidad)
-                // Compiten fuertemente por ir al cielo vertical
-                targetLuz = -90 + (20 * lado);
-                
-                // Bono de dominancia apical (crecen más si logran ir en vertical)
-                let esVertical = Math.abs(-90 - anguloNormalizado) < 30;
-                if (esVertical) bonoLongitud = 1.3;
+                targetLuz = -90 + (110 * lado) + (this.gen * 25 * lado); // Cascada
+                preferenciaUp = -1.0; 
+                preferenciaOut = 1.2;
+            } else if (this.adn.estilo < 0.70) {
+                targetLuz = -90 + (70 * lado); // Aparasolado
+                preferenciaUp = 0.2; 
+                preferenciaOut = 1.5;
+            } else {
+                targetLuz = -90 + (20 * lado); // Vertical
+                preferenciaUp = 1.5; 
+                preferenciaOut = 0.2;
             }
 
-            // Aplicar la rotación suave hacia la meta de luz
-            let fuerzaAtraccion = this.adn.fuerza + (this.gen * 0.02);
-            fuerzaAtraccion = Math.min(fuerzaAtraccion, 0.4); // Tope de seguridad
+            // Cálculo de Vectores
+            let vecY = -Math.sin(this.angulo * Math.PI / 180); // +1 si va arriba, -1 si va abajo
+            let vecX = Math.cos(this.angulo * Math.PI / 180);  // +1 si va derecha, -1 si va izq
+            
+            // Determinar si crece "hacia afuera" del tronco central (0)
+            let xSign = this.startX > 5 ? 1 : (this.startX < -5 ? -1 : (vecX >= 0 ? 1 : -1));
+            let outwardness = vecX * xSign; // +1 huye del tronco, -1 va hacia el tronco
+            let upwardness = vecY; 
 
-            this.angulo = anguloNormalizado + (targetLuz - anguloNormalizado) * fuerzaAtraccion;
+            // Evaluar vigor comparando vectores con el ADN
+            let vigor = (outwardness * preferenciaOut) + (upwardness * preferenciaUp);
+            vigor = vigor / (Math.abs(preferenciaOut) + Math.abs(preferenciaUp)); 
+
+            let bonoDir = 0;
+            if (vigor > 0) {
+                // Boost agresivo y altamante aleatorio para ramas ganadoras (hasta +180% de largo)
+                bonoDir = vigor * rnd(0.2, 1.8); 
+            } else {
+                // Castigo para ramas que apuntan mal (hasta -80% de largo)
+                bonoDir = vigor * rnd(0.2, 0.8); 
+            }
+            
+            bonoLongitud = 1.0 + bonoDir;
+            bonoLongitud = Math.max(0.2, Math.min(2.8, bonoLongitud)); // Topes de seguridad física
+
+            // Curvatura hacia la meta de luz (En lugar de pellizcar la base)
+            let diffAtraccion = targetLuz - this.angulo;
+            while (diffAtraccion <= -180) diffAtraccion += 360;
+            while (diffAtraccion > 180) diffAtraccion -= 360;
+            
+            let atraccion = this.adn.fuerza + (this.gen * 0.05);
+            atraccion = Math.min(atraccion, 0.85); 
+            this.curvatura = rnd(-10, 10) + (diffAtraccion * atraccion);
+
         } else {
-            this.angulo = anguloInicial; // El tronco principal siempre nace donde le mandan
+            // El tronco tiene curvatura orgánica pura
+            this.curvatura = (seededRandom() > 0.5 ? 1 : -1) * rnd(5, params.maxAngle * 0.5) + ((-90 - this.angulo) * 0.1); 
         }
 
-        // --- 3. APLICAR BONOS DE CRECIMIENTO ---
         let v = params.lenVariance;
         this.lenMultiplier = (1.0 + rnd(-v, v)) * bonoLongitud;
         if (this.gen === 0) this.lenMultiplier = (1.0 + rnd(-v * 0.5, v * 0.5));
         
-        let tendenciaCurva = (this.angulo > -90) ? 1 : -1;
-        if (this.gen === 0) tendenciaCurva = seededRandom() > 0.5 ? 1 : -1; 
-        let spreadCurva = params.maxAngle * 0.6; 
-        this.curvatura = (tendenciaCurva * rnd(0, spreadCurva)) + ((-90 - this.angulo) * 0.05); 
-
         // -------------------------------------------------------------
         
         this.lenObj = 0; this.lenAct = 0; 
@@ -382,11 +399,14 @@ export class Rama {
         if (this.age >= edadBifurcacion && this.gen < params.maxGen - 1 && !this.haBifurcado) {
             let prob = this.gen === 0 ? 0.90 : params.branchProb;
             if (seededRandom() < prob) {
-                let spread = rnd(15, params.maxAngle);
+                // SEGURIDAD ANTI-PARALELISMO: Aseguramos un mínimo de 20° de separación siempre
+                let spread = rnd(20, params.maxAngle);
                 this.crearHijo(this.angulo + spread, params, false);
                 this.crearHijo(this.angulo - spread, params, false);
             } else {
-                this.crearHijo(this.angulo + rnd(-15, 15), params, false);
+                // RAMA DE CONTINUACIÓN: Damos un quiebre mínimo para que no se vea como un palo recto
+                let kink = rnd(10, 25) * (seededRandom() > 0.5 ? 1 : -1);
+                this.crearHijo(this.angulo + kink, params, false);
             }
             this.haBifurcado = true;
         }

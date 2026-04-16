@@ -1,14 +1,25 @@
 // MotorBonsai.js
 
-// --- SISTEMA DE SEMILLAS (PRNG MULBERRY32) ---
+// --- SISTEMA DE SEMILLAS (PRNG MULBERRY32 + XMUR3) ---
 let semillaActual = 0;
 
-export function setSeed(textoSemilla) {
-    let hash = 0;
-    for (let i = 0; i < textoSemilla.length; i++) {
-        hash = Math.imul(31, hash) + textoSemilla.charCodeAt(i) | 0;
+// Generador de hash avanzado (xmur3) para garantizar el Efecto Avalancha
+function xmur3(str) {
+    for(var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = h << 13 | h >>> 19;
     }
-    semillaActual = hash;
+    return function() {
+        h = Math.imul(h ^ h >>> 16, 2246822507);
+        h = Math.imul(h ^ h >>> 13, 3266489909);
+        return (h ^= h >>> 16) >>> 0;
+    }
+}
+
+export function setSeed(textoSemilla) {
+    // Convertimos el texto en un hash caótico de 32 bits
+    const generadorHash = xmur3(textoSemilla);
+    semillaActual = generadorHash(); 
 }
 
 export function seededRandom() {
@@ -21,6 +32,7 @@ export function seededRandom() {
 export function rnd(min, max) { 
     return seededRandom() * (max - min) + min; 
 }
+// ---------------------------------------------
 // ---------------------------------------------
 
 export const DICCIONARIO_BOTANICO = {

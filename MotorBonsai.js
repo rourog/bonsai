@@ -229,7 +229,6 @@ export class Rama {
         this.startX = startX; this.startY = startY;
         this.angulo = anguloInicial;
         
-        // Mantener fluidez orgánica en la curvatura de la rama
         let tendenciaCurva = (this.angulo > -90) ? 1 : -1;
         if (this.gen === 0) tendenciaCurva = seededRandom() > 0.5 ? 1 : -1; 
         let spreadCurva = params.maxAngle * 0.6; 
@@ -291,11 +290,15 @@ export class Rama {
             let maxBrotes = (this.hijos.length === 0) ? 5 : 2; 
             let probBrote = 1 - Math.pow(1 - 0.75, delta);
             if (this.brotes.length < maxBrotes && seededRandom() < probBrote) {
-                this.brotes.push(new Brote(this.endXAct || this.startX, this.endYAct || this.startY, this.angulo, this.ctx));
+                // Validación para evitar brotes estancados en el origen
+                if (this.lenAct > 2) {
+                    this.brotes.push(new Brote(this.endXAct || this.startX, this.endYAct || this.startY, this.angulo, this.ctx));
+                }
             }
         }
 
-        if (params.tipoFlora !== 'ninguno') {
+        // CORRECCIÓN: La flor ya no nacerá en el punto (0,0) flotante, sino que esperará a que la rama exista físicamente
+        if (params.tipoFlora !== 'ninguno' && this.lenAct > 2) {
             let esRamaTerminal = this.gen >= params.maxGen - 2;
             let probFlora = 1 - Math.pow(1 - 0.60, delta);
             if (this.age >= params.inicioFloracion && esRamaTerminal) {
@@ -430,20 +433,15 @@ export class Rama {
         this.jointTip.style.display = "block"; 
 
         this.hijos.forEach(hijo => {
-            // SOLUCIÓN AL CRUCE: 
             if (hijo.esAccesoria) {
-                // Para ramas accesorias, calculamos la diferencia de ángulo para saber hacia qué lado desplazarla sutilmente (1-2px)
                 let diff = hijo.angulo - this.angulo;
-                // Normalizar ángulo entre -180 y 180
                 while (diff <= -180) diff += 360;
                 while (diff > 180) diff -= 360;
                 let direccionHijo = (diff > 0) ? 1 : -1;
                 
-                // Desplazamiento muy sutil (20% del radio) para evitar que flote
                 hijo.startX = midX + (this.nxMid * rMid * 0.2 * direccionHijo);
                 hijo.startY = midY + (this.nyMid * rMid * 0.2 * direccionHijo);
             } else {
-                // Las bifurcaciones de punta nacen EXACTAMENTE en el centro matemático para que la esfera las oculte
                 hijo.startX = this.endXAct;
                 hijo.startY = this.endYAct;
             }

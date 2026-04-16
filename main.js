@@ -765,7 +765,7 @@ if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
         document.body.classList.remove('zen-active');
         document.body.classList.remove('zen-idle');
         btnZenMain.classList.remove('active');
-        audioMotor.stopMusic();
+        // SE ELIMINÓ audioMotor.stopMusic() PARA MANTENER LA MÚSICA FLUYENDO
         liberarWakeLock();
     }
 });

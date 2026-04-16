@@ -33,7 +33,6 @@ export function rnd(min, max) {
     return seededRandom() * (max - min) + min; 
 }
 // ---------------------------------------------
-// ---------------------------------------------
 
 export const DICCIONARIO_BOTANICO = {
     hojas: [
@@ -92,7 +91,7 @@ export function generarPathHoja(forma, w, l) {
 }
 
 export class FrutoFlor {
-    constructor(tipo, startX, startY, ctx) { // RECIBE LAS COORDENADAS DESDE EL NACIMIENTO
+    constructor(tipo, startX, startY, ctx) { 
         this.ctx = ctx; 
         this.offsetX = rnd(-15, 15);
         this.offsetY = rnd(-15, 15);
@@ -114,14 +113,12 @@ export class FrutoFlor {
         this.dom.setAttribute("opacity", "0.95");
         this.dom.setAttribute("class", "flora-activa");
         
-        // APLICACIÓN INMEDIATA DEL TRANSFORM PARA EVITAR EL BUG DE LA PANTALLA (0,0)
         this.dom.setAttribute("transform", `translate(${startX + this.offsetX}, ${startY + this.offsetY}) scale(0)`);
         
         this.dom.addEventListener('click', (e) => { e.stopPropagation(); this.cortar(); });
         
         this.ctx.layerFlowers.appendChild(this.dom);
         
-        // Llamada segura al motor de audio
         if(this.ctx.audioMotor && typeof this.ctx.audioMotor.playPop === 'function') {
             this.ctx.audioMotor.playPop();
         }
@@ -309,14 +306,12 @@ export class Rama {
             let maxBrotes = (this.hijos.length === 0) ? 5 : 2; 
             let probBrote = 1 - Math.pow(1 - 0.75, delta);
             if (this.brotes.length < maxBrotes && seededRandom() < probBrote) {
-                // Validación para evitar brotes estancados en el origen
                 if (this.lenAct > 2) {
                     this.brotes.push(new Brote(this.endXAct || this.startX, this.endYAct || this.startY, this.angulo, this.ctx));
                 }
             }
         }
 
-        // CORRECCIÓN DE ORIGEN Y DENSIDAD AUMENTADA A 6:
         if (params.tipoFlora !== 'ninguno' && this.lenAct > 2) {
             let esRamaTerminal = this.gen >= params.maxGen - 2;
             let probFlora = 1 - Math.pow(1 - 0.60, delta);

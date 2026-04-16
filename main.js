@@ -25,7 +25,7 @@ let isAutoGrowing = false;
 let zenPausa = false;
 let isDying = false; 
 let deathFrameId = null;
-let muerteProgramada = false; // Control de ciclo seguro
+let muerteProgramada = false; 
 
 let wakeLock = null; 
 let idleTimeout = null;
@@ -177,7 +177,6 @@ const updatePot = () => {
     }
 };
 
-// --- FUNCIÓN CENTRAL DE REGENERACIÓN SEGURA ---
 function ejecutarMutacion() {
     if (isDying) return;
     iniciarMuerte(() => {
@@ -518,7 +517,10 @@ const btnSfx = document.getElementById('btn-sfx'); const btnSfxQuick = document.
 if (btnSfx) btnSfx.addEventListener('click', toggleSfx); if (btnSfxQuick) btnSfxQuick.addEventListener('click', toggleSfx);
 
 const btnMutarMenu = document.getElementById('btn-mutar');
-if(btnMutarMenu) btnMutarMenu.addEventListener('click', () => { ejecutarMutacion(); });
+if(btnMutarMenu) btnMutarMenu.addEventListener('click', (e) => { 
+    if (e && !e.isTrusted && isDying) return;
+    ejecutarMutacion(); 
+});
 
 if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
     if (!e.isTrusted) return; 
@@ -546,33 +548,6 @@ if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
     }
 });
 
-const PRESETS_BOTANICOS = {
-    pino:     { mForma: 'estandar', mColor: '#c05a41', viento: 10, length: 25, lenVar: 10, angle: 20, branch: 45, acc: 10, gen: 5, hojas: 5, flor: 8, forma: 'huso', flora: 'ninguno', edadRam: 3.5 }, 
-    roble:    { mForma: 'plana',    mColor: '#2c3e50', viento: 25, length: 18, lenVar: 30, angle: 50, branch: 75, acc: 35, gen: 6, hojas: 18, flor: 7, forma: 'ovalada', flora: 'ninguno', edadRam: 2.8 },
-    arbusto:  { mForma: 'redonda',  mColor: '#458b74', viento: 30, length: 8,  lenVar: 50, angle: 75, branch: 95, acc: 70, gen: 4, hojas: 25, flor: 4, forma: 'circular', flora: 'baya-roja', edadRam: 1.5 },
-    cipres:   { mForma: 'alta',     mColor: '#8c8c91', viento: 15, length: 15, lenVar: 15, angle: 10, branch: 80, acc: 50, gen: 6, hojas: 8, flor: 8, forma: 'larga', flora: 'ninguno', edadRam: 3.0 },
-    cerezo:   { mForma: 'redonda',  mColor: '#2c3e50', viento: 40, length: 17, lenVar: 40, angle: 45, branch: 70, acc: 25, gen: 6, hojas: 4, flor: 5, forma: 'ovalada', flora: 'flor-rosa', edadRam: 2.5 },
-    limonero: { mForma: 'redonda',  mColor: '#c05a41', viento: 20, length: 16, lenVar: 25, angle: 55, branch: 75, acc: 30, gen: 5, hojas: 16, flor: 5, forma: 'ovalada', flora: 'limon', edadRam: 2.8 }
-};
-
-window.aplicarPreset = function(tipo) {
-    if(isDying) return;
-    iniciarMuerte(() => {
-        const p = PRESETS_BOTANICOS[tipo];
-        actualizarUI('p-maceta-forma', p.mForma, false); actualizarUI('p-maceta-color', p.mColor, false);
-        actualizarUI('p-forma', p.forma, false); actualizarUI('p-flora', p.flora, false);
-        actualizarUI('p-viento', p.viento, false); actualizarUI('p-edadRam', p.edadRam, false);
-        actualizarUI('p-length', p.length, false); actualizarUI('p-lenVar', p.lenVar, false);
-        actualizarUI('p-angle', p.angle, false); actualizarUI('p-branch', p.branch, false);
-        actualizarUI('p-acc', p.acc, false); actualizarUI('p-gen', p.gen, false);
-        actualizarUI('p-hojas', p.hojas, false); actualizarUI('p-flor', p.flor, false);
-        
-        let inputSemilla = document.getElementById('input-semilla');
-        if(inputSemilla) inputSemilla.value = tipo.toUpperCase() + "-" + Math.floor(Math.random()*99);
-        updatePot(); guardarAjustes(); inicializarArbol();
-    });
-}
-
 function bucleAnimacion() {
     tiempoViento += 0.016; 
     let paramsActuales = getParams();
@@ -585,13 +560,11 @@ function bucleAnimacion() {
         iteracionGlobal += deltaZen;
         statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
 
-        // LA CORRECCIÓN DEL CICLO ZEN: Solo se evalúa si NO está programada la muerte
         if (iteracionGlobal >= 18 && !muerteProgramada) {
             muerteProgramada = true; 
             zenPausa = true;
             
             if (isZenMode) {
-                // Ejecutamos la mutación programática, garantizando que ocurra solo una vez
                 setTimeout(() => { if (!isDying && isZenMode) ejecutarMutacion(); }, 3000); 
             } else {
                 isAutoGrowing = false;
@@ -607,62 +580,28 @@ function bucleAnimacion() {
 }
 
 function inicializarArbol() {
-    // 1. Limpiar el lienzo de geometría anterior
-    domContext.layerTree.innerHTML = ''; 
-    domContext.layerLeaves.innerHTML = ''; 
-    domContext.layerFlowers.innerHTML = '';
-    
-    // 2. Restaurar la opacidad por si el árbol anterior murió
+    updatePot(); 
+    domContext.layerTree.innerHTML = ''; domContext.layerLeaves.innerHTML = ''; domContext.layerFlowers.innerHTML = '';
     domContext.layerTree.setAttribute('opacity', '1');
+    if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
     
-    // ---> CORRECCIÓN: Garantizar que la maceta y su tierra siempre se dibujen al iniciar <---
-    updatePot();
-    
-    // 3. Detener cualquier animación previa
-    if (animationFrameId) { 
-        cancelAnimationFrame(animationFrameId); 
-        animationFrameId = null; 
-    }
-    
-    // 4. Lógica de la Semilla (Identidad del árbol y la música)
     let inputSemilla = document.getElementById('input-semilla');
     if (inputSemilla) {
         let textoSemilla = inputSemilla.value.trim().toUpperCase();
+        if (!textoSemilla) { textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase(); inputSemilla.value = textoSemilla; }
         
-        // Si está vacío, generamos una semilla aleatoria
-        if (!textoSemilla) { 
-            textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase(); 
-            inputSemilla.value = textoSemilla; 
-        }
-        
-        // Alimentar los motores con la semilla
         setSeed(textoSemilla);
-        if (audioMotor && typeof audioMotor.reseedMusicEngine === 'function') {
-            audioMotor.reseedMusicEngine(textoSemilla);
-        }
+        if (audioMotor && typeof audioMotor.reseedMusicEngine === 'function') audioMotor.reseedMusicEngine(textoSemilla);
         
-        // Actualizar la URL silenciosamente para compartir
-        const url = new URL(window.location); 
-        url.searchParams.set('seed', textoSemilla); 
-        window.history.replaceState({}, '', url);
+        const url = new URL(window.location); url.searchParams.set('seed', textoSemilla); window.history.replaceState({}, '', url);
     }
     
-    // 5. Plantar la semilla: Crear el tronco base (0, 0) apuntando hacia arriba (-90 grados)
     arbolBase = new Rama(0, 0, 0, -90, null, getParams(), domContext);
-    
-    // 6. Reiniciar contadores del sistema de forma segura
-    iteracionGlobal = 0; 
-    zenPausa = false; 
-    muerteProgramada = false; 
-    isDying = false;
-    
-    if (statsDisplay) {
-        statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
-    }
-    
-    // 7. Arrancar el motor visual
+    iteracionGlobal = 0; zenPausa = false; muerteProgramada = false; isDying = false;
+    if (statsDisplay) statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
     bucleAnimacion();
 }
+
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     const urlParams = new URLSearchParams(window.location.search);
@@ -681,8 +620,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (!semillaURL && !localStorage.getItem('bonsai_zen_prefs')) window.aplicarPreset('pino'); 
-    else inicializarArbol();
+    inicializarArbol();
     
     isZenMode = true; document.body.classList.add('zen-active'); document.body.classList.add('zen-idle'); 
     if(btnZenMain) btnZenMain.classList.add('active');

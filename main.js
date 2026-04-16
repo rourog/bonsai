@@ -939,3 +939,12 @@ window.addEventListener('DOMContentLoaded', () => {
     
     solicitarWakeLock();
 });
+
+// --- REGISTRO PWA (SERVICE WORKER) ---
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(registration => console.log('PWA Lista: ServiceWorker registrado.', registration.scope))
+            .catch(err => console.log('PWA Error: Falla en el ServiceWorker.', err));
+    });
+}

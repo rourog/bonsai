@@ -143,7 +143,7 @@ const updatePot = () => {
     }
 };
 
-// --- ORQUESTADOR MAESTRO: ASTILLADO GLOBAL ---
+// --- ORQUESTADOR MEJORADO: ASTILLADO TEMPRANO Y OPACIDAD GLOBAL ---
 function iniciarMuerte(callbackRenacer) {
     if (!arbolBase || isDying) {
         if (callbackRenacer) callbackRenacer();
@@ -232,6 +232,7 @@ function iniciarMuerte(callbackRenacer) {
     let ramasFlat = [];
     let tronco = [];
     let fallTimeCursor = 2500; 
+    let primerQuiebreTime = 0; 
     
     for (let g = maxGenActual; g >= 0; g--) {
         if (ramasPorGen[g]) {
@@ -244,17 +245,22 @@ function iniciarMuerte(callbackRenacer) {
                     ramasFlat.push(r);
                 });
                 
+                if (primerQuiebreTime === 0) primerQuiebreTime = fallTimeCursor;
+
+                fallTimeCursor += 500; 
+                
                 if (audioMotor.sfxEnabled) {
                     let audioTime = fallTimeCursor - 400; 
                     setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), Math.max(0, audioTime));
                 }
-                fallTimeCursor += 500; 
             }
         }
     }
     
+    if (primerQuiebreTime === 0) primerQuiebreTime = 2500; 
+    
     let trunkTime = fallTimeCursor + 400;
-    let todasLasRamas = [...ramasFlat, ...tronco]; // Referencia combinada para astillar
+    let todasLasRamas = [...ramasFlat, ...tronco]; 
 
     let startTime = performance.now();
     let groundY = 25; 
@@ -263,7 +269,7 @@ function iniciarMuerte(callbackRenacer) {
         let elapsed = now - startTime;
         let completado = true;
 
-        // FASE 0: ASTILLADO GLOBAL TEMPRANO (A los 50ms)
+        // FASE 0: ASTILLADO GLOBAL TEMPRANO
         todasLasRamas.forEach(r => {
             if (elapsed > 50 && !r.isEarlySplintered && r.ramaRef.gen < maxGenActual) {
                 r.isEarlySplintered = true;
@@ -288,19 +294,14 @@ function iniciarMuerte(callbackRenacer) {
                         let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]);
                         let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
                         
-                        let vtipX = px2 - px1;
-                        let vtipY = py2 - py1;
-                        
+                        let vtipX = px2 - px1; let vtipY = py2 - py1;
                         let rFin = ref.grosorPuntaAct / 2;
                         let spikeLen = rFin * 2.0; 
                         
-                        // Los 3 picos del astillado
                         let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
                         let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                        
                         let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
                         let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
-                        
                         let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
                         let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
                         
@@ -363,7 +364,6 @@ function iniciarMuerte(callbackRenacer) {
                         
                         let vtipX = px2 - px1; let vtipY = py2 - py1;
                         
-                        // Generamos el cuerpo dentado
                         let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*3.5;
                         let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*3.5;
                         let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*3.5;
@@ -371,7 +371,6 @@ function iniciarMuerte(callbackRenacer) {
 
                         let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px1} ${py1}`;
 
-                        // Mantenemos la punta afilada (astillas) también en el trozo que cae
                         if (ref.gen < maxGenActual) {
                             let spikeLen = rFin * 2.0;
                             let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
@@ -382,7 +381,7 @@ function iniciarMuerte(callbackRenacer) {
                             let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
                             sharpPath += ` L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y}`;
                         } else {
-                            sharpPath += ` L ${ref.endXAct} ${ref.endYAct}`; // Las puntas jóvenes caen tal cual
+                            sharpPath += ` L ${ref.endXAct} ${ref.endYAct}`; 
                         }
                         
                         sharpPath += ` L ${px2} ${py2} L ${j1x - nx*rBase} ${j1y - ny*rBase} L ${bx2} ${by2} Z`;
@@ -418,14 +417,13 @@ function iniciarMuerte(callbackRenacer) {
             }
         });
 
-        // FASE 3: NECROSIS DEL TRONCO
-        tronco.forEach(r => {
-            if (r.dom.style.display !== 'none') {
-                completado = false;
-                
-                if (elapsed > trunkTime) {
-                    let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
-                    
+        // FASE 3: NECROSIS DEL TRONCO Y FADE OUT GLOBAL
+        if (elapsed > trunkTime) {
+            let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
+            
+            tronco.forEach(r => {
+                if (r.dom.style.display !== 'none') {
+                    completado = false;
                     let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                     if (match) {
                         let rFill = Math.max(15, match[1] * (1 - pProgreso));
@@ -435,15 +433,21 @@ function iniciarMuerte(callbackRenacer) {
                         r.path.setAttribute('fill', newColor);
                         r.joints[0].setAttribute('fill', newColor); 
                     }
-                    
-                    if (elapsed > trunkTime + 1000) {
-                        let opFinal = 1 - ((elapsed - (trunkTime + 1000)) / 800); 
-                        r.dom.setAttribute('opacity', Math.max(0, opFinal));
-                        if (opFinal <= 0) r.dom.style.display = 'none';
-                    }
+                }
+            });
+
+            // SOLUCIÓN AL TRASLAPE: Aplicamos la opacidad al contenedor padre, no a cada rama.
+            if (elapsed > trunkTime + 1000) {
+                let opFinal = 1 - ((elapsed - (trunkTime + 1000)) / 800); 
+                domContext.layerTree.setAttribute('opacity', Math.max(0, opFinal));
+                
+                if (opFinal <= 0) {
+                    tronco.forEach(r => r.dom.style.display = 'none');
                 }
             }
-        });
+        } else {
+            if (tronco.length > 0) completado = false; 
+        }
 
         if (!completado) {
             deathFrameId = requestAnimationFrame(loopMuerte);
@@ -669,6 +673,9 @@ function inicializarArbol() {
     domContext.layerTree.innerHTML = ''; 
     domContext.layerLeaves.innerHTML = ''; 
     domContext.layerFlowers.innerHTML = '';
+    
+    // RESTAURAMOS LA OPACIDAD GLOBAL PARA EL NUEVO ÁRBOL
+    domContext.layerTree.setAttribute('opacity', '1');
     
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);

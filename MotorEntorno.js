@@ -229,7 +229,7 @@ export class MotorEntorno {
         contenedorEstrellas.innerHTML = estrellasHTML;
     }
 
-    generarNubesProcedurales() {
+generarNubesProcedurales() {
         const contenedorNubes = document.getElementById('generador-nubes');
         if (!contenedorNubes) return;
         
@@ -249,24 +249,33 @@ export class MotorEntorno {
             const alturaY = Math.random() * 50; 
             const retrasoInicial = Math.random() * -180; 
 
-            const anchoNube = 60 + Math.random() * 100; 
+            // --- NUEVA MORFOLOGÍA HORIZONTAL ---
+            // Variabilidad extrema: desde nubes muy pequeñitas (80px) hasta estelas larguísimas (350px)
+            const anchoNube = 80 + Math.random() * 270; 
             nube.style.width = `${anchoNube}px`;
-            nube.style.height = `${anchoNube * 0.8}px`; 
             
-            const numPuffs = 4 + Math.floor(Math.random() * 6); 
-            let puffsHTML = `<div class="puff base-puff" style="width: 100%; height: 25px; left: 0;"></div>`;
+            // Altura desvinculada y controlada (máximo 70px) para que sean nubes planas y alargadas
+            const altoNube = 30 + Math.random() * 40; 
+            nube.style.height = `${altoNube}px`; 
+            
+            // El número de "puffs" ahora depende de qué tan larga sea la nube para que no queden huecos
+            const numPuffs = Math.floor(anchoNube / 25) + Math.floor(Math.random() * 3); 
+            
+            // Base plana para que la nube descanse correctamente en el aire
+            let puffsHTML = `<div class="puff base-puff" style="width: 100%; height: 20px; left: 0; bottom: 0;"></div>`;
 
             for(let j = 0; j < numPuffs; j++) {
-                const sizeW = 20 + Math.random() * (anchoNube * 0.7); 
-                const sizeH = sizeW * (0.8 + Math.random() * 0.4); 
+                const sizeW = 20 + Math.random() * 60; // Círculos anchos
+                const sizeH = 20 + Math.random() * (altoNube - 15); // Círculos que no superen el alto máximo
                 
                 const maxLeft = anchoNube - sizeW;
                 let leftPos = Math.random() * maxLeft;
 
-                if (j === 0) leftPos = Math.random() * (maxLeft * 0.1);
-                if (j === 1) leftPos = maxLeft - (Math.random() * (maxLeft * 0.1));
+                // Aseguramos que las puntas izquierda y derecha siempre tengan un puff redondo
+                if (j === 0) leftPos = 0;
+                if (j === 1) leftPos = maxLeft;
 
-                puffsHTML += `<div class="puff" style="width: ${sizeW}px; height: ${sizeH}px; left: ${leftPos}px;"></div>`;
+                puffsHTML += `<div class="puff" style="width: ${sizeW}px; height: ${sizeH}px; left: ${leftPos}px; bottom: 0;"></div>`;
             }
 
             nube.innerHTML = puffsHTML;

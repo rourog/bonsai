@@ -31,7 +31,7 @@
         }
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             margin-top: 30px;
         }
@@ -89,7 +89,8 @@
             <button class="sfx-btn" id="btn-pop" disabled>🌸 Pop (Nace Flor)</button>
             <button class="sfx-btn" id="btn-rama" disabled>🪵 Rama Seca</button>
             <button class="sfx-btn" id="btn-ave" disabled>🐦 Trino de Ave</button>
-            <button class="sfx-btn" id="btn-pez" disabled>🐟 Salto de Pez</button>
+            <button class="sfx-btn" id="btn-agua" disabled>💧 Agua Corriendo</button>
+            <button class="sfx-btn" id="btn-rana" disabled>🐸 Rana</button>
             <button class="sfx-btn" id="btn-campana" disabled>🎐 Campana de Viento</button>
             <button class="sfx-btn" id="btn-carpintero" disabled>🪓 Pájaro Carpintero</button>
             <button class="sfx-btn" id="btn-nota" disabled style="grid-column: 1 / -1; background-color: #2c3e50;">🎵 Nota Pentatónica (Cuenco)</button>
@@ -99,7 +100,7 @@
     </div>
 
     <script type="module">
-        import { MotorAudio } from './MotorAudio.js';
+        import { MotorAudio } from './MotorAudio.js?v=27';
         
         const audio = new MotorAudio();
         const btnPower = document.getElementById('btn-power');
@@ -141,8 +142,12 @@
             audio.playAve(t());
         });
 
-        document.getElementById('btn-pez').addEventListener('click', () => {
-            audio.playPezSplash(t());
+        document.getElementById('btn-agua').addEventListener('click', () => {
+            audio.playAguaCorriendo(t());
+        });
+
+        document.getElementById('btn-rana').addEventListener('click', () => {
+            audio.playRana(t());
         });
 
         document.getElementById('btn-campana').addEventListener('click', () => {

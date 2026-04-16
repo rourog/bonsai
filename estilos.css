@@ -38,7 +38,6 @@ body {
 /* --- PANEL PRINCIPAL (DASHBOARD) --- */
 #dashboard {
     position: absolute;
-    /* Sumamos el Safe Area de Android/iOS al margen inferior */
     bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     width: 90%;
@@ -51,10 +50,8 @@ body {
     padding: 24px;
     box-shadow: var(--md-elevation-3);
     z-index: 100;
-    
     transform: translate(-50%, 150%); 
     transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
-    
     max-height: 80vh;
     overflow-y: auto;
     opacity: 0;
@@ -188,7 +185,7 @@ input[type=range]::-moz-range-thumb {
     cursor: pointer;
 }
 
-/* Indicador de Estadísticas (Nodos / Años) */
+/* Indicador de Estadísticas */
 #stats {
     position: absolute;
     top: calc(20px + env(safe-area-inset-top, 0px));
@@ -210,63 +207,35 @@ input[type=range]::-moz-range-thumb {
 
 body.zen-idle #stats { opacity: 0; }
 
-/* Botón Flotante Maestro Zen (FAB Principal) */
-#btn-zen-main {
+/* --- NUEVO: CONTROLES LATERALES (COLUMNA DERECHA CENTRADA) --- */
+#right-controls {
     position: absolute;
-    /* Sumamos el Safe Area */
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     right: 20px;
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: var(--md-sys-color-surface);
-    color: var(--md-sys-color-on-surface);
-    border: 1px solid rgba(255,255,255,0.4);
-    box-shadow: var(--md-elevation-3);
-    cursor: pointer;
-    z-index: 101;
-    transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-}
-
-#btn-zen-main.active {
-    background: var(--md-sys-color-primary);
-    color: white;
-    border-color: transparent;
-}
-
-#btn-zen-main:hover { transform: scale(1.08); }
-#btn-zen-main:active { transform: scale(0.95); }
-
-/* --- ACCESOS RÁPIDOS FLOTANTES (COLUMNA DERECHA) --- */
-.quick-actions-column {
-    position: absolute;
-    /* 96px base + Safe Area */
-    bottom: calc(96px + env(safe-area-inset-bottom, 0px)); 
-    right: 26px; 
-    display: flex;
-    flex-direction: column-reverse; 
     gap: 16px;
     z-index: 90;
-    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0, 0, 1);
+    transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
-body.zen-idle .quick-actions-column {
+/* Ocultar toda la columna si el panel grande está abierto */
+body:has(#dashboard.open) #right-controls {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%) scale(0.9);
+}
+
+/* Desaparecen los pequeños suavemente hacia la derecha cuando hay inactividad */
+body.zen-idle .fab-small {
     opacity: 0;
     pointer-events: none;
     transform: translateX(20px); 
 }
 
-body:has(#dashboard.open) .quick-actions-column {
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(0.9);
-}
-
+/* Estilo Base del Botón Rápido Pequeño */
 .fab-small {
     width: 52px;
     height: 52px;
@@ -281,7 +250,7 @@ body:has(#dashboard.open) .quick-actions-column {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+    transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .fab-small:hover {
@@ -297,6 +266,56 @@ body:has(#dashboard.open) .quick-actions-column {
     border-color: transparent;
 }
 
+.fab-small .material-symbols-rounded { font-size: 22px !important; }
+
+/* --- EL BOTÓN ZEN TRANSLÚCIDO --- */
+#btn-zen-main {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid transparent; 
+    box-shadow: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.4; /* Sutil por defecto */
+    transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
+}
+
+#btn-zen-main:hover {
+    opacity: 1;
+    background: var(--md-sys-color-surface);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: var(--md-elevation-3);
+    transform: scale(1.05);
+}
+
+/* Modo Zen Activo: Ícono verde suave */
+#btn-zen-main.active {
+    color: var(--md-sys-color-primary);
+    opacity: 0.5;
+}
+
+#btn-zen-main.active:hover {
+    background: var(--md-sys-color-primary);
+    color: white;
+    opacity: 1;
+}
+
+/* Casi invisible cuando estás meditando (inactividad) */
+body.zen-idle #btn-zen-main {
+    opacity: 0.1;
+}
+body.zen-idle #btn-zen-main:hover {
+    opacity: 1;
+}
+
+/* Input de Semilla Específico */
 #input-semilla:focus {
     outline: none;
     border-color: var(--md-sys-color-primary) !important;

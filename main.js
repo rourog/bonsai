@@ -47,12 +47,10 @@ function guardarAjustes() {
         seed: document.getElementById('input-semilla') ? document.getElementById('input-semilla').value : ''
     };
     
-    // Guardar Sliders
     document.querySelectorAll('#ui-parametros input[type="range"]').forEach(el => {
         state.ui[el.id] = el.value;
     });
     
-    // Guardar Botones Cíclicos (Maceta, Hojas, etc)
     ['p-maceta-forma', 'p-maceta-color', 'p-forma', 'p-flora'].forEach(id => {
         const el = document.getElementById(id);
         if(el) state.ui[id] = el.getAttribute('data-value');
@@ -95,7 +93,6 @@ function cargarAjustes() {
         return false; 
     }
 }
-// -----------------------------------------
 
 function construirInterfaz() {
     const contenedorMorfologia = document.getElementById('ui-morfologia');
@@ -331,7 +328,10 @@ function iniciarMuerte(callbackRenacer) {
     let todasLasRamas = [...ramasFlat, ...tronco]; 
 
     let startTime = performance.now();
-    let groundY = 25; 
+    
+    // NUEVO: La gravedad (groundY) ahora lee dinámicamente la profundidad de la maceta actual
+    let basePotY = entornoMotor.macetaActual ? entornoMotor.macetaActual.baseY : 35;
+    let groundY = basePotY + 10; // Cae ligeramente dentro del pasto para integrarse mejor
 
     function loopMuerte(now) {
         let elapsed = now - startTime;
@@ -364,7 +364,7 @@ function iniciarMuerte(callbackRenacer) {
                         
                         let vtipX = px2 - px1; let vtipY = py2 - py1;
                         let rFin = ref.grosorPuntaAct / 2;
-                        let spikeLen = rFin * 2.0; 
+                        let spikeLen = rFin * 1.5; // Astillas un poco más controladas
                         
                         let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
                         let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
@@ -418,7 +418,9 @@ function iniciarMuerte(callbackRenacer) {
                     if (len > 0) {
                         let nx = -dy / len; let ny = dx / len;
                         let nxDir = dx / len; let nyDir = dy / len;
-                        let rBase = (ref.grosorBaseAct / 2) * 0.6; 
+                        
+                        // CORRECCIÓN DE GROSOR: Mantenemos el 95% del grosor natural (antes era 0.6)
+                        let rBase = (ref.grosorBaseAct / 2) * 0.95; 
                         let rFin = ref.grosorPuntaAct / 2;
                         
                         let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase;
@@ -428,15 +430,16 @@ function iniciarMuerte(callbackRenacer) {
                         
                         let vtipX = px2 - px1; let vtipY = py2 - py1;
                         
-                        let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*3.5;
-                        let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*3.5;
-                        let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*3.5;
-                        let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*3.5;
+                        // Ajustamos el quiebre interno para que no se salga de la madera ahora que es más ancha
+                        let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*1.2;
+                        let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*1.2;
+                        let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*1.2;
+                        let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*1.2;
 
                         let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px1} ${py1}`;
 
                         if (ref.gen < maxGenActual) {
-                            let spikeLen = rFin * 2.0;
+                            let spikeLen = rFin * 1.5;
                             let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
                             let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
                             let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
@@ -459,6 +462,8 @@ function iniciarMuerte(callbackRenacer) {
                     if (!r.tocandoSuelo) {
                         r.vy += 0.6; 
                         r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
+                        
+                        // CORRECCIÓN DE CAÍDA: Usamos el groundY calculado con la base de la maceta
                         if (r.y + r.cy > groundY) {
                             r.y = groundY - r.cy;
                             r.vy *= -0.3; r.vx *= 0.5;
@@ -567,13 +572,13 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('touchstart', (e) => {
-    if (!e.isTrusted) return; // Ignoramos si viene de un script
+    if (!e.isTrusted) return; 
     arrancarAudioSilencioso();
     resetTimerIdle();
 }, { passive: true });
 
 window.addEventListener('click', (e) => {
-    if (!e.isTrusted) return; // Ignoramos clics de mutación
+    if (!e.isTrusted) return; 
     arrancarAudioSilencioso();
     resetTimerIdle();
 });
@@ -724,7 +729,7 @@ if(btnMutar) btnMutar.addEventListener('click', () => {
 });
 
 if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
-    if (!e.isTrusted) return; // Protección extra
+    if (!e.isTrusted) return; 
     e.stopPropagation(); 
     isZenMode = !isZenMode;
     
@@ -796,6 +801,7 @@ function bucleAnimacion() {
     
     audioMotor.actualizarViento(tiempoViento, paramsActuales.viento * 100);
     entornoMotor.animarPasto(tiempoViento, paramsActuales.viento);
+
     if ((isZenMode || isAutoGrowing) && !zenPausa && arbolBase) {
         let deltaZen = 0.015; 
         arbolBase.crecer(deltaZen, paramsActuales);
@@ -885,10 +891,9 @@ window.addEventListener('DOMContentLoaded', () => {
         inicializarArbol();
     }
     
-    // Arranque inmersivo automático
     isZenMode = true;
     document.body.classList.add('zen-active');
-    document.body.classList.add('zen-idle'); // <--- Inicia oculto, esperando actividad humana
+    document.body.classList.add('zen-idle'); 
     if(btnZenMain) btnZenMain.classList.add('active');
     
     isAutoGrowing = true;

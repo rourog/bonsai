@@ -842,37 +842,55 @@ function bucleAnimacion() {
 }
 
 function inicializarArbol() {
+    // 1. Limpiar el lienzo (SVG)
     domContext.layerTree.innerHTML = ''; 
     domContext.layerLeaves.innerHTML = ''; 
     domContext.layerFlowers.innerHTML = '';
     
+    // 2. Restaurar la opacidad por si el árbol anterior murió
     domContext.layerTree.setAttribute('opacity', '1');
     
+    // 3. Detener cualquier animación previa
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
     }
     
+    // 4. Lógica de la Semilla (Identidad del árbol y la música)
     let inputSemilla = document.getElementById('input-semilla');
     if (inputSemilla) {
         let textoSemilla = inputSemilla.value.trim().toUpperCase();
+        
+        // Si está vacío, generamos una semilla aleatoria
         if (!textoSemilla) {
             textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase();
             inputSemilla.value = textoSemilla;
             guardarAjustes();
         }
-        setSeed(textoSemilla);
         
+        // Alimentar los motores con la semilla
+        setSeed(textoSemilla); // Para la geometría del árbol
+        if (audioMotor && typeof audioMotor.reseedMusicEngine === 'function') {
+            audioMotor.reseedMusicEngine(textoSemilla); // Para la escala musical
+        }
+        
+        // Actualizar la URL para que se pueda compartir
         const url = new URL(window.location);
         url.searchParams.set('seed', textoSemilla);
         window.history.replaceState({}, '', url);
     }
     
+    // 5. Plantar la semilla: Crear el tronco base (0, 0) apuntando hacia arriba (-90 grados)
     arbolBase = new Rama(0, 0, 0, -90, null, getParams(), domContext);
+    
+    // 6. Reiniciar contadores del sistema
     iteracionGlobal = 0;
     zenPausa = false;
-    statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
+    if (statsDisplay) {
+        statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
+    }
     
+    // 7. Arrancar el motor visual
     bucleAnimacion();
 }
 

@@ -427,7 +427,6 @@ async function solicitarWakeLock() {
 function liberarWakeLock() { if (wakeLock !== null) { wakeLock.release(); wakeLock = null; } }
 document.addEventListener('visibilitychange', async () => { if (wakeLock === null && document.visibilityState === 'visible' && isZenMode) solicitarWakeLock(); });
 
-// EL CÓDIGO CRÍTICO PARA EL AUDIO: Resumir incondicionalmente el contexto al interactuar
 function arrancarAudioSilencioso() {
     if (audioMotor && audioMotor.audioCtx && audioMotor.audioCtx.state === 'suspended') {
         audioMotor.audioCtx.resume();
@@ -608,27 +607,62 @@ function bucleAnimacion() {
 }
 
 function inicializarArbol() {
-    domContext.layerTree.innerHTML = ''; domContext.layerLeaves.innerHTML = ''; domContext.layerFlowers.innerHTML = '';
-    domContext.layerTree.setAttribute('opacity', '1');
-    if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+    // 1. Limpiar el lienzo de geometría anterior
+    domContext.layerTree.innerHTML = ''; 
+    domContext.layerLeaves.innerHTML = ''; 
+    domContext.layerFlowers.innerHTML = '';
     
+    // 2. Restaurar la opacidad por si el árbol anterior murió
+    domContext.layerTree.setAttribute('opacity', '1');
+    
+    // ---> CORRECCIÓN: Garantizar que la maceta y su tierra siempre se dibujen al iniciar <---
+    updatePot();
+    
+    // 3. Detener cualquier animación previa
+    if (animationFrameId) { 
+        cancelAnimationFrame(animationFrameId); 
+        animationFrameId = null; 
+    }
+    
+    // 4. Lógica de la Semilla (Identidad del árbol y la música)
     let inputSemilla = document.getElementById('input-semilla');
     if (inputSemilla) {
         let textoSemilla = inputSemilla.value.trim().toUpperCase();
-        if (!textoSemilla) { textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase(); inputSemilla.value = textoSemilla; }
         
+        // Si está vacío, generamos una semilla aleatoria
+        if (!textoSemilla) { 
+            textoSemilla = Math.random().toString(36).substring(2, 8).toUpperCase(); 
+            inputSemilla.value = textoSemilla; 
+        }
+        
+        // Alimentar los motores con la semilla
         setSeed(textoSemilla);
-        if (audioMotor && typeof audioMotor.reseedMusicEngine === 'function') audioMotor.reseedMusicEngine(textoSemilla);
+        if (audioMotor && typeof audioMotor.reseedMusicEngine === 'function') {
+            audioMotor.reseedMusicEngine(textoSemilla);
+        }
         
-        const url = new URL(window.location); url.searchParams.set('seed', textoSemilla); window.history.replaceState({}, '', url);
+        // Actualizar la URL silenciosamente para compartir
+        const url = new URL(window.location); 
+        url.searchParams.set('seed', textoSemilla); 
+        window.history.replaceState({}, '', url);
     }
     
+    // 5. Plantar la semilla: Crear el tronco base (0, 0) apuntando hacia arriba (-90 grados)
     arbolBase = new Rama(0, 0, 0, -90, null, getParams(), domContext);
-    iteracionGlobal = 0; zenPausa = false; muerteProgramada = false; isDying = false;
-    if (statsDisplay) statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
+    
+    // 6. Reiniciar contadores del sistema de forma segura
+    iteracionGlobal = 0; 
+    zenPausa = false; 
+    muerteProgramada = false; 
+    isDying = false;
+    
+    if (statsDisplay) {
+        statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
+    }
+    
+    // 7. Arrancar el motor visual
     bucleAnimacion();
 }
-
 window.addEventListener('DOMContentLoaded', () => {
     construirInterfaz();
     const urlParams = new URLSearchParams(window.location.search);

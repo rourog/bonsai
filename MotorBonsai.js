@@ -17,7 +17,6 @@ function xmur3(str) {
 }
 
 export function setSeed(textoSemilla) {
-    // Convertimos el texto en un hash caótico de 32 bits
     const generadorHash = xmur3(textoSemilla);
     semillaActual = generadorHash(); 
 }
@@ -312,14 +311,12 @@ export class Rama {
             }
         }
 
-        if (params.tipoFlora !== 'ninguno' && this.lenAct > 2) {
+        if (params.tipoFlora !== 'ninguno' && this.lenAct > 5 && this.endXAct !== undefined) {
             let esRamaTerminal = this.gen >= params.maxGen - 2;
             let probFlora = 1 - Math.pow(1 - 0.60, delta);
             if (this.age >= params.inicioFloracion && esRamaTerminal) {
                 if (this.flora.length < 6 && seededRandom() < probFlora) {
-                    let sX = this.endXAct !== undefined ? this.endXAct : this.startX;
-                    let sY = this.endYAct !== undefined ? this.endYAct : this.startY;
-                    this.flora.push(new FrutoFlor(params.tipoFlora, sX, sY, this.ctx));
+                    this.flora.push(new FrutoFlor(params.tipoFlora, this.endXAct, this.endYAct, this.ctx));
                 }
             }
         }
@@ -469,4 +466,19 @@ export class Rama {
     }
 
     contarNodos() { return 1 + this.hijos.reduce((acc, h) => acc + h.contarNodos(), 0); }
+
+    // --- NUEVA LÓGICA DE MADUREZ BIOLÓGICA ---
+    verificarMadurez(maxGen) {
+        // Si ya llegó a la última generación, es madura
+        if (this.gen >= maxGen - 1) return true;
+        
+        // Si no ha llegado a la edad de bifurcarse, aún no madura
+        if (!this.haBifurcado) return false;
+
+        // Si ya intentó bifurcarse, su madurez depende de si sus hijos ya maduraron.
+        // Si por azar no tuvo hijos (rama estéril), se considera terminada (madura)
+        if (this.hijos.length === 0) return true;
+
+        return this.hijos.every(h => h.verificarMadurez(maxGen));
+    }
 }

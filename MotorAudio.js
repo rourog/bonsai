@@ -34,7 +34,7 @@ export class MotorAudio {
             // Canal de SFX con Volumen Maestro Potenciado
             this.masterGainSFX = this.audioCtx.createGain();
             this.masterGainSFX.connect(this.audioCtx.destination);
-            this.masterGainSFX.gain.value = 0.8; // 80% de volumen para efectos
+            this.masterGainSFX.gain.value = 0.8; 
             
             // Canal de Música
             this.masterMusic = this.audioCtx.createGain();
@@ -145,7 +145,7 @@ export class MotorAudio {
         } catch(e) {}
     }
 
-    // --- EFECTOS DE SONIDO OPTIMIZADOS (FOLEY PROCEDURAL) ---
+    // --- EFECTOS DE SONIDO OPTIMIZADOS ---
 
     ecosistemaAmbiental = () => {
         if (!this.sfxEnabled || !this.audioCtx) return;
@@ -179,7 +179,6 @@ export class MotorAudio {
             osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.1);
             
             gain.gain.setValueAtTime(0, time);
-            // VOLUMEN BOOST: Mucho más audible
             gain.gain.linearRampToValueAtTime(0.4, time + 0.01); 
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15); 
             
@@ -192,7 +191,6 @@ export class MotorAudio {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
         const numNotas = Math.floor(Math.random() * 3) + 2; 
-        
         for(let i = 0; i < numNotas; i++) {
             const osc = this.audioCtx.createOscillator();
             const gain = this.audioCtx.createGain();
@@ -243,90 +241,120 @@ export class MotorAudio {
         }
     }
 
+    // EL AVE PRECIOSA ORIGINAL RESTAURADA
+    playAve(tiempoActual) {
+        if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
+        const trinos = Math.floor(Math.random() * 3) + 2; 
+        let t = tiempoActual;
+        for (let i = 0; i < trinos; i++) {
+            const osc = this.audioCtx.createOscillator();
+            const gain = this.audioCtx.createGain();
+            osc.connect(gain).connect(this.masterGainSFX);
+            osc.type = 'sine';
+            const baseFreq = 2000 + Math.random() * 1500; 
+            osc.frequency.setValueAtTime(baseFreq, t);
+            const direccion = Math.random() > 0.5 ? 800 : -800; 
+            osc.frequency.exponentialRampToValueAtTime(baseFreq + direccion, t + 0.1);
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            osc.start(t); osc.stop(t + 0.15);
+            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
+            t += 0.1 + Math.random() * 0.1; 
+        }
+    }
+
     playAguaCorriendo(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
-        // RIACHUELO: Ruido modulado por baja frecuencia
+        // RIACHUELO: Ruido rosa suave con sweep sutil (Sin helicópteros)
         const noise = this.audioCtx.createBufferSource();
         noise.buffer = this.noiseBuffer;
         noise.loop = true;
 
-        const filter = this.audioCtx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 600;
-        filter.Q.value = 0.8; // Menos Q = Menos metálico, más ancho
+        const lowpass = this.audioCtx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 800; // Quita el siseo molesto
 
-        const amGain = this.audioCtx.createGain(); // Modulador de amplitud
-        
-        // LFO para hacer el efecto de burbujeo / salpicadura
+        const bandpass = this.audioCtx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.value = 400;
+        bandpass.Q.value = 1.2;
+
+        // LFO súper lento para simular el cambio de corriente
         const lfo = this.audioCtx.createOscillator();
         lfo.type = 'sine';
-        lfo.frequency.value = 15 + Math.random() * 10;
+        lfo.frequency.value = 2 + Math.random() * 3; // 2-5Hz, muy tranquilo
         
         const lfoGain = this.audioCtx.createGain();
-        lfoGain.gain.value = 0.8;
+        lfoGain.gain.value = 200; 
         
-        lfo.connect(lfoGain).connect(amGain.gain);
+        lfo.connect(lfoGain).connect(bandpass.frequency);
 
         const masterGain = this.audioCtx.createGain();
         
-        noise.connect(filter).connect(amGain).connect(masterGain).connect(this.masterGainSFX);
+        noise.connect(lowpass).connect(bandpass).connect(masterGain).connect(this.masterGainSFX);
         
         const duracion = 3.0 + Math.random() * 2.0;
 
         masterGain.gain.setValueAtTime(0, tiempoActual);
-        masterGain.gain.linearRampToValueAtTime(0.6, tiempoActual + 1.0); // Boost de volumen
-        masterGain.gain.linearRampToValueAtTime(0.6, tiempoActual + duracion - 1.0); 
+        masterGain.gain.linearRampToValueAtTime(0.5, tiempoActual + 1.0); 
+        masterGain.gain.linearRampToValueAtTime(0.5, tiempoActual + duracion - 1.0); 
         masterGain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + duracion); 
         
         noise.start(tiempoActual); lfo.start(tiempoActual);
         noise.stop(tiempoActual + duracion + 0.1); lfo.stop(tiempoActual + duracion + 0.1);
         
-        noise.onended = () => { try { noise.disconnect(); lfo.disconnect(); filter.disconnect(); amGain.disconnect(); masterGain.disconnect(); } catch(e){} };
+        noise.onended = () => { try { noise.disconnect(); lfo.disconnect(); lowpass.disconnect(); bandpass.disconnect(); lfoGain.disconnect(); masterGain.disconnect(); } catch(e){} };
     }
 
     playRana(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
+        // RANA REAL: Oscilador bajo con envolvente rápida para el "rrribit"
         const osc = this.audioCtx.createOscillator();
-        const gain = this.audioCtx.createGain();
-        const filter = this.audioCtx.createBiquadFilter();
-        
         osc.type = 'sawtooth';
-        osc.frequency.value = 70 + Math.random() * 20; 
+        osc.frequency.value = 60 + Math.random() * 20; 
         
         const lfo = this.audioCtx.createOscillator();
-        const lfoGain = this.audioCtx.createGain();
-        lfo.type = 'square';
-        lfo.frequency.value = 35; 
-        lfoGain.gain.value = 1.0; 
+        lfo.type = 'triangle'; 
+        lfo.frequency.value = 20 + Math.random() * 5; // 20-25 pulsos
         
         const amGain = this.audioCtx.createGain();
-        lfo.connect(lfoGain).connect(amGain.gain);
+        amGain.gain.value = 0; 
         
-        filter.type = 'peaking'; // Da resonancia gutural
-        filter.frequency.value = 800; 
-        filter.Q.value = 5.0;
+        const lfoDepth = this.audioCtx.createGain();
+        lfoDepth.gain.value = 1.0; 
+        lfo.connect(lfoDepth).connect(amGain.gain);
         
-        osc.connect(amGain).connect(filter).connect(gain).connect(this.masterGainSFX);
+        const filter = this.audioCtx.createBiquadFilter();
+        filter.type = 'bandpass'; 
+        filter.frequency.value = 1000 + Math.random() * 400; // Formante de garganta
+        filter.Q.value = 3.0;
         
-        const duracion = 0.4 + Math.random() * 0.3;
+        const masterGain = this.audioCtx.createGain();
+
+        osc.connect(amGain).connect(filter).connect(masterGain).connect(this.masterGainSFX);
         
-        gain.gain.setValueAtTime(0, tiempoActual);
-        gain.gain.linearRampToValueAtTime(0.8, tiempoActual + 0.1); // Super boost a la ganancia
-        gain.gain.linearRampToValueAtTime(0.8, tiempoActual + duracion - 0.1);
-        gain.gain.linearRampToValueAtTime(0.001, tiempoActual + duracion);
+        const duracion = 0.3 + Math.random() * 0.2;
         
+        masterGain.gain.setValueAtTime(0, tiempoActual);
+        masterGain.gain.linearRampToValueAtTime(0.8, tiempoActual + 0.05); 
+        masterGain.gain.linearRampToValueAtTime(0.8, tiempoActual + duracion - 0.05);
+        masterGain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + duracion);
+        
+        // Pequeña caída en afinación para el rebote natural
+        osc.frequency.exponentialRampToValueAtTime(80 + Math.random() * 30, tiempoActual + duracion);
+
         osc.start(tiempoActual); lfo.start(tiempoActual);
         osc.stop(tiempoActual + duracion); lfo.stop(tiempoActual + duracion);
         
-        osc.onended = () => { try { osc.disconnect(); lfo.disconnect(); amGain.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
+        osc.onended = () => { try { osc.disconnect(); lfo.disconnect(); amGain.disconnect(); filter.disconnect(); masterGain.disconnect(); lfoDepth.disconnect(); } catch(e){} };
     }
 
     playRamaSeca(time) {
         if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         try {
-            // Parte 1: El golpe sordo (Oscilador)
             const osc = this.audioCtx.createOscillator();
             const oscGain = this.audioCtx.createGain();
             osc.type = 'triangle';
@@ -337,7 +365,6 @@ export class MotorAudio {
             oscGain.gain.linearRampToValueAtTime(0.5, time + 0.01);
             oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
             
-            // Parte 2: El crujido de la madera (Ruido Blanco)
             const noise = this.audioCtx.createBufferSource();
             noise.buffer = this.noiseBuffer;
             const filter = this.audioCtx.createBiquadFilter();
@@ -364,10 +391,8 @@ export class MotorAudio {
     playHojasCrujiendo(tiempoActual) {
         if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
-        // Micro ráfagas irregulares de ruido agudo
         const ráfagas = 4 + Math.floor(Math.random() * 4);
         for(let i = 0; i < ráfagas; i++) {
-            // El Math.random() en el tiempo da la irregularidad natural del crujido
             const t = tiempoActual + (i * 0.08) + (Math.random() * 0.04);
             
             const noise = this.audioCtx.createBufferSource();
@@ -376,7 +401,7 @@ export class MotorAudio {
             const filter = this.audioCtx.createBiquadFilter();
             filter.type = 'bandpass';
             filter.frequency.setValueAtTime(4000 + Math.random() * 2000, t);
-            filter.Q.value = 3; // Medio ancho para que suene a textura, no a silbido
+            filter.Q.value = 3;
 
             const gain = this.audioCtx.createGain();
             gain.gain.setValueAtTime(0, t);

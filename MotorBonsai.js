@@ -3,7 +3,6 @@
 // --- SISTEMA DE SEMILLAS (PRNG MULBERRY32 + XMUR3) ---
 let semillaActual = 0;
 
-// Generador de hash avanzado (xmur3) para garantizar el Efecto Avalancha
 function xmur3(str) {
     for(var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) {
         h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
@@ -113,9 +112,7 @@ export class FrutoFlor {
         this.dom.setAttribute("class", "flora-activa");
         
         this.dom.setAttribute("transform", `translate(${startX + this.offsetX}, ${startY + this.offsetY}) scale(0)`);
-        
         this.dom.addEventListener('click', (e) => { e.stopPropagation(); this.cortar(); });
-        
         this.ctx.layerFlowers.appendChild(this.dom);
         
         if(this.ctx.audioMotor && typeof this.ctx.audioMotor.playPop === 'function') {
@@ -153,7 +150,12 @@ export class Brote {
         this.ctx = ctx;
         this.x = x; 
         this.y = y;
-        this.angulo = anguloRama + rnd(-70, 70);
+        
+        // Los brotes también buscan un poco la luz (-90 grados es arriba)
+        let anguloDeseado = anguloRama + rnd(-70, 70);
+        // Corrección de fototropismo para hojas: las atrae un 30% hacia arriba
+        this.angulo = anguloDeseado + (-90 - anguloDeseado) * 0.3;
+        
         this.longitud = rnd(8, 20);
         this.hojas = [];
         this.podado = false;
@@ -230,10 +232,8 @@ export class Rama {
         this.ctx = ctx; 
         this.esAccesoria = false; 
         
-        this.nxMid = 0; 
-        this.nyMid = 0;
-        this.nxFin = 0;
-        this.nyFin = 0;
+        this.nxMid = 0; this.nyMid = 0;
+        this.nxFin = 0; this.nyFin = 0;
         
         if (this.padre) {
             this.baseBarkColor = this.padre.baseBarkColor;
@@ -242,16 +242,45 @@ export class Rama {
         }
 
         this.startX = startX; this.startY = startY;
-        this.angulo = anguloInicial;
         
+        // --- 1. CORRECCIÓN DE FOTOTROPISMO (BÚSQUEDA DE LUZ) ---
+        // Normalizamos el ángulo para saber qué tan lejos está de "apuntar hacia arriba" (-90 grados)
+        let anguloNormalizado = anguloInicial;
+        while (anguloNormalizado <= -180) anguloNormalizado += 360;
+        while (anguloNormalizado > 180) anguloNormalizado -= 360;
+        
+        // Fuerza de atracción hacia la luz (-90 deg). A mayor generación, más fuerte buscan la luz.
+        let atraccionLuz = 0.15 + (this.gen * 0.05); 
+        // Límite de seguridad para que no se vuelvan completamente rectas
+        atraccionLuz = Math.min(atraccionLuz, 0.6);
+        
+        // Aplicamos la corrección si no es el tronco principal
+        if (this.gen > 0) {
+            this.angulo = anguloNormalizado + (-90 - anguloNormalizado) * atraccionLuz;
+        } else {
+            this.angulo = anguloInicial; // El tronco base respeta su ángulo
+        }
+        // --------------------------------------------------------
+
         let tendenciaCurva = (this.angulo > -90) ? 1 : -1;
         if (this.gen === 0) tendenciaCurva = seededRandom() > 0.5 ? 1 : -1; 
         let spreadCurva = params.maxAngle * 0.6; 
         this.curvatura = (tendenciaCurva * rnd(0, spreadCurva)) + ((-90 - this.angulo) * 0.05); 
         
+        // --- 2. BONO DE DOMINANCIA APICAL ---
         let v = params.lenVariance;
         this.lenMultiplier = this.gen === 0 ? (1.0 + rnd(-v * 0.5, v * 0.5)) : (1.0 + rnd(-v, v));
         
+        // Calculamos qué tan vertical es la rama (0 = totalmente horizontal o hacia abajo, 1 = apunta directo a -90)
+        let cercaniaVertical = 1 - Math.min(1, Math.abs(-90 - this.angulo) / 90);
+        // Si la rama apunta hacia arriba, le damos un "boost" de hasta 40% en su longitud
+        let bonoApical = 1.0 + (cercaniaVertical * 0.4);
+        
+        if (this.gen > 0) {
+            this.lenMultiplier *= bonoApical;
+        }
+        // ------------------------------------
+
         this.lenObj = 0; this.lenAct = 0; 
         this.grosorBaseAct = 0; this.grosorPuntaAct = 0;
         
@@ -326,6 +355,8 @@ export class Rama {
         if (this.age >= edadBifurcacion && this.gen < params.maxGen - 1 && !this.haBifurcado) {
             let prob = this.gen === 0 ? 0.90 : params.branchProb;
             if (seededRandom() < prob) {
+                // Al bifurcar, el "spread" determinará qué tan abiertas nacen las ramas.
+                // Como luego aplicamos el fototropismo en su constructor, tenderán a curvarse hacia arriba hermosamente.
                 let spread = rnd(15, params.maxAngle);
                 this.crearHijo(this.angulo + spread, params, false);
                 this.crearHijo(this.angulo - spread, params, false);
@@ -467,18 +498,10 @@ export class Rama {
 
     contarNodos() { return 1 + this.hijos.reduce((acc, h) => acc + h.contarNodos(), 0); }
 
-    // --- NUEVA LÓGICA DE MADUREZ BIOLÓGICA ---
     verificarMadurez(maxGen) {
-        // Si ya llegó a la última generación, es madura
         if (this.gen >= maxGen - 1) return true;
-        
-        // Si no ha llegado a la edad de bifurcarse, aún no madura
         if (!this.haBifurcado) return false;
-
-        // Si ya intentó bifurcarse, su madurez depende de si sus hijos ya maduraron.
-        // Si por azar no tuvo hijos (rama estéril), se considera terminada (madura)
         if (this.hijos.length === 0) return true;
-
         return this.hijos.every(h => h.verificarMadurez(maxGen));
     }
 }

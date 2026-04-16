@@ -28,9 +28,14 @@ export const DICCIONARIO_ENTORNO = {
 export class MotorEntorno {
     constructor(ctx) {
         this.ctx = ctx; 
+        
+        // 0: Apagado, 1: Normal(Despejado), 2: Colorido(Mágico), 3: Lluvia(Nublado)
+        this.estadoCielo = 0; 
         this.skyEnabled = false;
+        
         this.skyContainer = document.getElementById('sky-bg');
         this.macetaActual = DICCIONARIO_ENTORNO.macetas[0];
+        this.domLluvia = null;
         
         this.inyectarEstilosAtmosfericos();
         this.construirCielo();
@@ -77,7 +82,6 @@ export class MotorEntorno {
                 break;
         }
         this.ctx.layerPot.innerHTML = svg;
-        
         this.generarSuelo();
     }
 
@@ -94,82 +98,67 @@ export class MotorEntorno {
             this.ctx.layerPot.parentNode.insertBefore(this.domPastoFrente, this.ctx.layerTree);
         }
 
-        const baseY = this.macetaActual.baseY;
+        // Configurar transición y opacidad dependiendo del estado actual
+        this.domGround.style.transition = 'opacity 1s ease';
+        this.domPastoFrente.style.transition = 'opacity 1s ease';
+        const opacity = this.estadoCielo === 0 ? '0' : '1';
+        this.domGround.style.opacity = opacity;
+        this.domPastoFrente.style.opacity = opacity;
 
+        const baseY = this.macetaActual.baseY;
         let html = `<path class="colina-base" d="M -1500 ${baseY + 200} Q 0 ${baseY - 200} 1500 ${baseY + 200} L 1500 600 L -1500 600 Z" />`;
-        
         let bladesHtml = '';
 
-        // Pasto Trasero (Densidad normal)
         for (let i = 0; i < 300; i++) {
             let x = (Math.random() - 0.5) * 3000; 
-            
             let t = (x + 1500) / 3000; 
             let curveY = (baseY + 200)*Math.pow(1-t, 2) + 2*(baseY - 200)*(1-t)*t + (baseY + 200)*Math.pow(t, 2);
             
             let y = curveY + Math.random() * 150; 
             let perspectiva = 1 + (y - curveY) * 0.015; 
-            
             let altura = (8 + Math.random() * 12) * perspectiva;
             let grosor = (1.5 + Math.random() * 2) * perspectiva;
             let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
             let inclinacionIni = Math.random() * 16 - 8; 
 
             let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
-            
-            bladesHtml += `<g transform="translate(${x}, ${y})">
-                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
-                     </g>`;
+            bladesHtml += `<g transform="translate(${x}, ${y})"><path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" /></g>`;
         }
         this.domGround.innerHTML = html + bladesHtml;
 
-        // GENERAR PASTO FRONTAL (Ajustado para integrarse perfectamente con el fondo)
         let htmlFrente = '';
-        // Reducido a 18 briznas para que la densidad sea igual a la del resto de la colina
         for (let i = 0; i < 18; i++) {
             let x = (Math.random() - 0.5) * 160; 
-            let y = baseY + (Math.random() * 18); // Se asienta ligeramente bajo la maceta
-            
+            let y = baseY + (Math.random() * 18); 
             let perspectiva = 1.6; 
-            // Usamos exactamente la misma fórmula de altura que el pasto de fondo para no desentonar
             let altura = (8 + Math.random() * 12) * perspectiva;
             let grosor = (1.5 + Math.random() * 2) * perspectiva;
             let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
-            let inclinacionIni = Math.random() * 16 - 8; // Misma inclinación natural
+            let inclinacionIni = Math.random() * 16 - 8; 
 
             let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
-            
-            htmlFrente += `<g transform="translate(${x}, ${y})">
-                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
-                     </g>`;
+            htmlFrente += `<g transform="translate(${x}, ${y})"><path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" /></g>`;
         }
         this.domPastoFrente.innerHTML = htmlFrente;
 
-        this.blades = [
-            ...this.domGround.querySelectorAll('.blade'),
-            ...this.domPastoFrente.querySelectorAll('.blade')
-        ];
+        this.blades = [...this.domGround.querySelectorAll('.blade'), ...this.domPastoFrente.querySelectorAll('.blade')];
     }
 
     animarPasto(tiempo, viento) {
         if (!this.blades) return;
         const fuerza = viento * 45; 
-        
         this.blades.forEach((blade) => {
             const x = parseFloat(blade.getAttribute('data-x'));
             const tilt = parseFloat(blade.getAttribute('data-tilt'));
-            
             const fase = x * 0.015; 
             const ruido = Math.sin(tiempo * 3.5 + fase);
             const oscilacion = tilt + (viento * 20) + (ruido * fuerza * 0.6);
-            
             blade.setAttribute('transform', `rotate(${oscilacion})`);
         });
     }
 
     construirCielo() {
         if (!this.skyContainer) return;
-        
         this.skyContainer.innerHTML = '';
         this.skyContainer.className = 'atmosfera-inactiva'; 
 
@@ -178,10 +167,8 @@ export class MotorEntorno {
             <div class="capa-cielo cielo-atardecer" id="cielo-atardecer"></div>
             <div class="capa-cielo cielo-noche" id="cielo-noche"></div>
             <div class="capa-cielo cielo-amanecer" id="cielo-amanecer"></div>
-
             <div class="capa-estrellas" id="generador-estrellas"></div>
             <div class="capa-nubes" id="generador-nubes"></div>
-
             <div class="rueda-celeste">
                 <div class="astro sol"></div>
                 <div class="astro luna"></div>
@@ -189,14 +176,11 @@ export class MotorEntorno {
         `;
         
         this.skyContainer.innerHTML = htmlAtmosfera;
-        this.generarNubesProcedurales();
-        this.generarEstrellasProcedurales();
-        this.asignarClimaAleatorio();
     }
 
-    asignarClimaAleatorio() {
+    aplicarClimaEspecifico(idClima) {
         if (!this.skyContainer) return;
-        const clima = DICCIONARIO_ENTORNO.climas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.climas.length)];
+        const clima = DICCIONARIO_ENTORNO.climas.find(c => c.id === idClima) || DICCIONARIO_ENTORNO.climas[0];
         
         document.getElementById('cielo-dia').style.background = clima.dia;
         document.getElementById('cielo-atardecer').style.background = clima.atardecer;
@@ -204,72 +188,84 @@ export class MotorEntorno {
         document.getElementById('cielo-amanecer').style.background = clima.amanecer;
     }
 
+    generarLluvia() {
+        this.limpiarLluvia();
+        this.domLluvia = document.createElement('div');
+        this.domLluvia.id = 'capa-lluvia';
+        this.domLluvia.style.position = 'absolute';
+        this.domLluvia.style.top = '0';
+        this.domLluvia.style.left = '0';
+        this.domLluvia.style.width = '100%';
+        this.domLluvia.style.height = '100%';
+        this.domLluvia.style.zIndex = '3'; 
+        this.domLluvia.style.pointerEvents = 'none';
+        this.domLluvia.style.overflow = 'hidden';
+
+        let html = '';
+        for (let i = 0; i < 150; i++) {
+            let left = Math.random() * 100;
+            let animDuration = 0.5 + Math.random() * 0.5;
+            let animDelay = Math.random() * 2;
+            let opacity = 0.1 + Math.random() * 0.3;
+
+            html += `<div class="gota-lluvia" style="left: ${left}vw; animation-duration: ${animDuration}s; animation-delay: ${animDelay}s; opacity: ${opacity};"></div>`;
+        }
+        this.domLluvia.innerHTML = html;
+        this.skyContainer.appendChild(this.domLluvia);
+    }
+
+    limpiarLluvia() {
+        if (this.domLluvia) {
+            this.domLluvia.remove();
+            this.domLluvia = null;
+        }
+    }
+
     generarEstrellasProcedurales() {
         const contenedorEstrellas = document.getElementById('generador-estrellas');
         if (!contenedorEstrellas) return;
 
         contenedorEstrellas.innerHTML = '';
-        const numEstrellas = 150; 
         let estrellasHTML = '';
-
-        for(let i = 0; i < numEstrellas; i++) {
+        for(let i = 0; i < 150; i++) {
             let x = Math.random() * 100;
             let y = Math.pow(Math.random(), 1.8) * 100; 
-            
             let size = 0.5 + Math.random() * 1.8; 
             let op = 0.2 + Math.random() * 0.8;
-
-            estrellasHTML += `<div style="
-                position: absolute; left: ${x}vw; top: ${y}vh; 
-                width: ${size}px; height: ${size}px; 
-                background: #ffffff; opacity: ${op}; border-radius: 50%;
-                box-shadow: 0 0 ${size}px rgba(255,255,255,0.8);
-            "></div>`;
+            estrellasHTML += `<div style="position: absolute; left: ${x}vw; top: ${y}vh; width: ${size}px; height: ${size}px; background: #ffffff; opacity: ${op}; border-radius: 50%; box-shadow: 0 0 ${size}px rgba(255,255,255,0.8);"></div>`;
         }
         contenedorEstrellas.innerHTML = estrellasHTML;
     }
 
-generarNubesProcedurales() {
+    generarNubesProcedurales() {
         const contenedorNubes = document.getElementById('generador-nubes');
         if (!contenedorNubes) return;
         
         contenedorNubes.innerHTML = '';
-        // Aumentamos ligeramente la cantidad de nubes para aprovechar mejor las nuevas capas de profundidad
         const numeroNubes = 8 + Math.floor(Math.random() * 6); 
         
         for(let i = 0; i < numeroNubes; i++) {
             const nube = document.createElement('div');
             nube.className = 'nube procedural';
             
-            // --- FÍSICAS DE PARALLAX ESTRICTO ---
-            // profundidad: 0.0 (fondo/lejos) a 1.0 (frente/cerca)
             const profundidad = Math.random(); 
-            
-            // 1. Velocidad: Lejos = Lento (280s), Cerca = Rápido (80s)
             const duracionViaje = 280 - (profundidad * 200); 
-            
-            // 2. Escala estricta: El tamaño base se multiplica por la profundidad (30% a 100% de su tamaño)
             const multiplicadorTamaño = 0.3 + (profundidad * 0.7); 
-            
-            // 3. Opacidad y Desenfoque Atmosférico
-            const opacidadBase = 0.15 + (profundidad * 0.6); // Más transparentes a lo lejos
-            const desenfoque = 6 - (profundidad * 4); // Más borrosas a lo lejos (6px a 2px)
+            const opacidadBase = 0.15 + (profundidad * 0.6); 
+            const desenfoque = 6 - (profundidad * 4); 
             const ordenCapa = Math.floor(profundidad * 10);
             
-            const alturaY = Math.random() * 55; // Se distribuyen en la mitad superior del cielo
-            const retrasoInicial = Math.random() * -280; // Para que ya haya nubes en pantalla al cargar
+            const alturaY = Math.random() * 55; 
+            const retrasoInicial = Math.random() * -280; 
 
-            // Aplicamos el multiplicador al tamaño base para garantizar la perspectiva
             const anchoNube = (120 + Math.random() * 200) * multiplicadorTamaño; 
             const altoNube = (30 + Math.random() * 30) * multiplicadorTamaño; 
 
             nube.style.width = `${anchoNube}px`;
             nube.style.height = `${altoNube}px`; 
             
-            // Base plana escalada
             let puffsHTML = `<div class="puff base-puff" style="width: 100%; height: ${20 * multiplicadorTamaño}px; left: 0; bottom: 0;"></div>`;
 
-            // --- CÚMULOS REALISTAS CON GRADIENTE ---
             const numPuffs = Math.floor(anchoNube / (20 * multiplicadorTamaño)) + Math.floor(Math.random() * 4); 
             const centroNube = anchoNube / 2;
 
@@ -278,10 +274,8 @@ generarNubesProcedurales() {
                 const distanciaAlCentro = Math.abs(leftPos - centroNube) / centroNube;
                 const factorTamaño = 1 - Math.pow(distanciaAlCentro, 2) * 0.7; 
                 
-                // El tamaño del cúmulo respeta la escala general de la nube
                 const sizeW = (20 + Math.random() * 50) * factorTamaño * multiplicadorTamaño; 
                 const sizeH = (20 + Math.random() * (altoNube - 10)) * (factorTamaño * 0.8 + 0.2); 
-                
                 const sesgoCentral = (Math.random() - 0.5) * anchoNube * factorTamaño * 0.5; 
                 const leftPosAjustado = Math.max(0, Math.min(anchoNube - sizeW, leftPos + sesgoCentral));
 
@@ -302,20 +296,17 @@ generarNubesProcedurales() {
             }
 
             nube.innerHTML = puffsHTML;
-
-            // Inyectamos todas las físicas al DOM de la nube
-            nube.style.filter = `blur(${desenfoque}px)`; // Sobrescribe el CSS estático
-            nube.style.setProperty('--scale', 1); // La escala CSS ya no es necesaria, escalamos los pixeles matemáticamente
+            nube.style.filter = `blur(${desenfoque}px)`; 
+            nube.style.setProperty('--scale', 1); 
             nube.style.top = `${alturaY}%`;
             nube.style.opacity = opacidadBase;
             nube.style.zIndex = ordenCapa;
-            
             nube.style.animation = `flotar ${duracionViaje}s infinite linear ${retrasoInicial}s`;
             
             contenedorNubes.appendChild(nube);
         }
     }
-    
+
     inyectarEstilosAtmosfericos() {
         if (document.getElementById('css-entorno')) return;
 
@@ -338,103 +329,91 @@ generarNubesProcedurales() {
             .capa-estrellas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; opacity: 0; }
             body.bg-sky-active .capa-estrellas { animation: cicloNoche ${cicloSegundos}s infinite linear, parpadeo 4s infinite alternate ease-in-out; }
 
-            .rueda-celeste { 
-                position: absolute; top: 50%; left: 50%; 
-                width: 120vmax; height: 120vmax; 
-                margin-left: -60vmax; margin-top: -35vmax; 
-                border-radius: 50%; z-index: 3; 
-            }
+            .rueda-celeste { position: absolute; top: 50%; left: 50%; width: 120vmax; height: 120vmax; margin-left: -60vmax; margin-top: -35vmax; border-radius: 50%; z-index: 3; }
             body.bg-sky-active .rueda-celeste { animation: rotacionCeleste ${cicloSegundos}s infinite linear; }
 
             .astro { position: absolute; left: 50%; border-radius: 50%; }
-            
-            .sol { 
-                width: 500px; height: 500px; margin-left: -250px; top: -250px; 
-                background: radial-gradient(circle, rgba(255,245,200,0.9) 0%, rgba(255,235,160,0.3) 30%, rgba(255,200,100,0.1) 50%, rgba(255,255,255,0) 70%); 
-            }
-            
-            .luna { 
-                width: 80px; height: 80px; margin-left: -40px; bottom: -40px; 
-                background: #f4f6f0; 
-                box-shadow: 0 0 50px rgba(255, 255, 255, 0.5), inset -12px -12px 18px rgba(0,0,0,0.2); 
-            }
+            .sol { width: 500px; height: 500px; margin-left: -250px; top: -250px; background: radial-gradient(circle, rgba(255,245,200,0.9) 0%, rgba(255,235,160,0.3) 30%, rgba(255,200,100,0.1) 50%, rgba(255,255,255,0) 70%); }
+            .luna { width: 80px; height: 80px; margin-left: -40px; bottom: -40px; background: #f4f6f0; box-shadow: 0 0 50px rgba(255, 255, 255, 0.5), inset -12px -12px 18px rgba(0,0,0,0.2); }
             body.bg-sky-active .luna { animation: opacidadLuna ${cicloSegundos}s infinite linear; }
 
             .capa-nubes { position: absolute; top: 0; left: 0; width: 100%; height: 70%; z-index: 4; }
-            
             .nube.procedural { position: absolute; filter: blur(5px); }
             .puff { position: absolute; background: white; border-radius: 50%; bottom: 0; }
             .base-puff { border-radius: 15px !important; }
-
             body.bg-sky-active .nube.procedural { animation-play-state: running; }
 
-            /* ESTILOS DEL HORIZONTE Y PASTO */
+            /* ESTILOS LLUVIA */
+            .gota-lluvia {
+                position: absolute;
+                width: 1.5px;
+                height: 60px;
+                background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.7));
+                top: -60px;
+                animation: caerLluvia linear infinite;
+            }
+            @keyframes caerLluvia {
+                0% { transform: translateY(-5vh) translateX(0) scaleY(1); }
+                100% { transform: translateY(110vh) translateX(-10vh) scaleY(1.5); }
+            }
+
             .colina-base { fill: #4A6B53; transition: fill 2s ease; }
             .pasto-tipo1 { fill: #5B8266; transition: fill 2s ease; }
             .pasto-tipo2 { fill: #689675; transition: fill 2s ease; }
-
             body.bg-sky-active .colina-base { animation: cicloSuelo ${cicloSegundos}s infinite linear; }
             body.bg-sky-active .pasto-tipo1 { animation: cicloPasto1 ${cicloSegundos}s infinite linear; }
             body.bg-sky-active .pasto-tipo2 { animation: cicloPasto2 ${cicloSegundos}s infinite linear; }
 
             @keyframes rotacionCeleste { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 50% { transform: rotate(180deg); } 75% { transform: rotate(270deg); } 100% { transform: rotate(360deg); } }
             @keyframes opacidadLuna { 0%, 35% { opacity: 0; } 45%, 55% { opacity: 0.9; } 65%, 100% { opacity: 0; } }
-            
             @keyframes cicloDia { 0%, 25% { opacity: 1; } 35%, 85% { opacity: 0; } 95%, 100% { opacity: 1; } }
             @keyframes cicloAtardecer { 0%, 15% { opacity: 0; } 25%, 35% { opacity: 1; } 45%, 100% { opacity: 0; } }
             @keyframes cicloNoche { 0%, 35% { opacity: 0; } 45%, 75% { opacity: 1; } 85%, 100% { opacity: 0; } }
             @keyframes cicloAmanecer { 0%, 75% { opacity: 0; } 85%, 95% { opacity: 1; } 100% { opacity: 0; } }
-
-            @keyframes flotar {
-                0% { transform: translateX(-30vw) scale(var(--scale, 1)); }
-                100% { transform: translateX(120vw) scale(var(--scale, 1)); }
-            }
+            @keyframes flotar { 0% { transform: translateX(-30vw) scale(var(--scale, 1)); } 100% { transform: translateX(120vw) scale(var(--scale, 1)); } }
             @keyframes parpadeo { 0% { filter: opacity(0.3); } 100% { filter: opacity(1); } }
-
-            @keyframes cicloSuelo {
-                0%, 25% { fill: #4A6B53; }     
-                35% { fill: #2c3a2f; }         
-                45%, 75% { fill: #111814; }    
-                85% { fill: #2c3a2f; }         
-                95%, 100% { fill: #4A6B53; }   
-            }
-            @keyframes cicloPasto1 {
-                0%, 25% { fill: #5B8266; }     
-                35% { fill: #354a3a; } 
-                45%, 75% { fill: #1a261f; }    
-                85% { fill: #354a3a; } 
-                95%, 100% { fill: #5B8266; } 
-            }
-            @keyframes cicloPasto2 {
-                0%, 25% { fill: #689675; }     
-                35% { fill: #3d5743; } 
-                45%, 75% { fill: #213328; }    
-                85% { fill: #3d5743; } 
-                95%, 100% { fill: #689675; } 
-            }
+            @keyframes cicloSuelo { 0%, 25% { fill: #4A6B53; } 35% { fill: #2c3a2f; } 45%, 75% { fill: #111814; } 85% { fill: #2c3a2f; } 95%, 100% { fill: #4A6B53; } }
+            @keyframes cicloPasto1 { 0%, 25% { fill: #5B8266; } 35% { fill: #354a3a; } 45%, 75% { fill: #1a261f; } 85% { fill: #354a3a; } 95%, 100% { fill: #5B8266; } }
+            @keyframes cicloPasto2 { 0%, 25% { fill: #689675; } 35% { fill: #3d5743; } 45%, 75% { fill: #213328; } 85% { fill: #3d5743; } 95%, 100% { fill: #689675; } }
         `;
         document.head.appendChild(estilo);
     }
 
-    toggleSky() {
-        this.skyEnabled = !this.skyEnabled;
+    // --- NUEVO: SISTEMA DE MÁQUINA DE ESTADOS ---
+    ciclarEntorno() {
+        this.estadoCielo = (this.estadoCielo + 1) % 4;
         
-        if (this.skyEnabled) {
-            document.body.classList.add('bg-sky-active');
-            this.skyContainer.classList.remove('atmosfera-inactiva'); 
-            
-            this.asignarClimaAleatorio();
-            this.generarNubesProcedurales();
-            this.generarEstrellasProcedurales();
-        } else {
+        if (this.domGround) this.domGround.style.opacity = this.estadoCielo === 0 ? '0' : '1';
+        if (this.domPastoFrente) this.domPastoFrente.style.opacity = this.estadoCielo === 0 ? '0' : '1';
+
+        if (this.estadoCielo === 0) { // APAGADO
+            this.skyEnabled = false;
             document.body.classList.remove('bg-sky-active');
+            this.limpiarLluvia();
             setTimeout(() => {
-                if(!this.skyEnabled) {
+                if(this.estadoCielo === 0) {
                     this.skyContainer.classList.add('atmosfera-inactiva');
                     document.getElementById('generador-nubes').innerHTML = ''; 
                 }
             }, 1000);
+        } else {
+            this.skyEnabled = true;
+            document.body.classList.add('bg-sky-active');
+            this.skyContainer.classList.remove('atmosfera-inactiva'); 
+
+            this.generarNubesProcedurales();
+            this.generarEstrellasProcedurales();
+            this.limpiarLluvia();
+
+            if (this.estadoCielo === 1) { // NORMAL
+                this.aplicarClimaEspecifico('despejado');
+            } else if (this.estadoCielo === 2) { // COLORIDO
+                this.aplicarClimaEspecifico('magico');
+            } else if (this.estadoCielo === 3) { // LLUVIA
+                this.aplicarClimaEspecifico('nublado');
+                this.generarLluvia();
+            }
         }
-        return this.skyEnabled;
+        return this.estadoCielo;
     }
 }

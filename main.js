@@ -639,29 +639,59 @@ if(btnFlores) btnFlores.addEventListener('click', (e) => {
     guardarAjustes();
 });
 
-const btnSfx = document.getElementById('btn-sfx');
-if(btnSfx) btnSfx.addEventListener('click', (e) => { 
-    const activado = audioMotor.toggleSfx(); 
-    e.currentTarget.classList.toggle('active-toggle', activado); 
-    e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">volume_up</span> SFX: ON' : '<span class="material-symbols-rounded">volume_off</span> SFX: OFF'; 
-    guardarAjustes();
-});
+// --- SINCRONIZADOR VISUAL DE BOTONES (PANEL VS ACCESOS RÁPIDOS) ---
+function syncUI(idPanel, idQuick, activado, iconOn, iconOff, textOn, textOff) {
+    const btnPanel = document.getElementById(idPanel);
+    const btnQuick = document.getElementById(idQuick);
+    
+    // Actualizar botón del menú grande (con texto)
+    if (btnPanel) {
+        btnPanel.classList.toggle('active-toggle', activado);
+        btnPanel.innerHTML = `<span class="material-symbols-rounded">${activado ? iconOn : iconOff}</span> ${activado ? textOn : textOff}`;
+    }
+    // Actualizar botón flotante rápido (solo icono)
+    if (btnQuick) {
+        btnQuick.classList.toggle('active', activado);
+        btnQuick.innerHTML = `<span class="material-symbols-rounded">${activado ? iconOn : iconOff}</span>`;
+    }
+}
 
-const btnMusic = document.getElementById('btn-music');
-if(btnMusic) btnMusic.addEventListener('click', (e) => { 
-    const activado = audioMotor.toggleMusic(); 
-    e.currentTarget.classList.toggle('active-toggle', activado); 
-    e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">music_note</span> MÚSICA: ON' : '<span class="material-symbols-rounded">music_off</span> MÚSICA: OFF'; 
+// Controladores Maestros
+const toggleFondo = () => {
+    const activado = entornoMotor.toggleSky();
+    syncUI('btn-fondo', 'btn-fondo-quick', activado, 'landscape', 'image', 'CIELO: ON', 'CIELO: OFF');
     guardarAjustes();
-});
+};
 
+const toggleMusic = () => {
+    const activado = audioMotor.toggleMusic();
+    syncUI('btn-music', 'btn-music-quick', activado, 'music_note', 'music_off', 'MÚSICA: ON', 'MÚSICA: OFF');
+    guardarAjustes();
+};
+
+const toggleSfx = () => {
+    const activado = audioMotor.toggleSfx();
+    syncUI('btn-sfx', 'btn-sfx-quick', activado, 'volume_up', 'volume_off', 'SFX: ON', 'SFX: OFF');
+    guardarAjustes();
+};
+
+// Enchufar los clics a ambos botones (Fondo)
 const btnFondo = document.getElementById('btn-fondo');
-if(btnFondo) btnFondo.addEventListener('click', (e) => { 
-    const activado = entornoMotor.toggleSky(); 
-    e.currentTarget.classList.toggle('active-toggle', activado); 
-    e.currentTarget.innerHTML = activado ? '<span class="material-symbols-rounded">landscape</span> CIELO: ON' : '<span class="material-symbols-rounded">image</span> CIELO: OFF'; 
-    guardarAjustes();
-});
+const btnFondoQuick = document.getElementById('btn-fondo-quick');
+if (btnFondo) btnFondo.addEventListener('click', toggleFondo);
+if (btnFondoQuick) btnFondoQuick.addEventListener('click', toggleFondo);
+
+// Enchufar los clics a ambos botones (Música)
+const btnMusic = document.getElementById('btn-music');
+const btnMusicQuick = document.getElementById('btn-music-quick');
+if (btnMusic) btnMusic.addEventListener('click', toggleMusic);
+if (btnMusicQuick) btnMusicQuick.addEventListener('click', toggleMusic);
+
+// Enchufar los clics a ambos botones (SFX)
+const btnSfx = document.getElementById('btn-sfx');
+const btnSfxQuick = document.getElementById('btn-sfx-quick');
+if (btnSfx) btnSfx.addEventListener('click', toggleSfx);
+if (btnSfxQuick) btnSfxQuick.addEventListener('click', toggleSfx);
 
 const btnMutar = document.getElementById('btn-mutar');
 if(btnMutar) btnMutar.addEventListener('click', () => {

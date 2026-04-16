@@ -151,10 +151,9 @@ export class Brote {
         this.x = x; 
         this.y = y;
         
-        // Los brotes también buscan un poco la luz (-90 grados es arriba)
         let anguloDeseado = anguloRama + rnd(-70, 70);
-        // Corrección de fototropismo para hojas: las atrae un 30% hacia arriba
-        this.angulo = anguloDeseado + (-90 - anguloDeseado) * 0.3;
+        // Los brotes mantienen un leve fototropismo vertical para que las hojas se acomoden bien
+        this.angulo = anguloDeseado + (-90 - anguloDeseado) * 0.2;
         
         this.longitud = rnd(8, 20);
         this.hojas = [];
@@ -235,52 +234,80 @@ export class Rama {
         this.nxMid = 0; this.nyMid = 0;
         this.nxFin = 0; this.nyFin = 0;
         
+        // --- 1. ADN DEL ÁRBOL (Generado solo en el tronco base) ---
         if (this.padre) {
+            this.adn = this.padre.adn;
             this.baseBarkColor = this.padre.baseBarkColor;
         } else {
+            this.adn = {
+                estilo: seededRandom(), // Define la silueta del árbol (0.0 a 1.0)
+                fuerza: rnd(0.08, 0.25) // Qué tan rápido giran las ramas
+            };
             this.baseBarkColor = BARK_PALETTE[Math.floor(this.seed % BARK_PALETTE.length)];
         }
-
-        this.startX = startX; this.startY = startY;
         
-        // --- 1. CORRECCIÓN DE FOTOTROPISMO (BÚSQUEDA DE LUZ) ---
-        // Normalizamos el ángulo para saber qué tan lejos está de "apuntar hacia arriba" (-90 grados)
+        this.startX = startX; 
+        this.startY = startY;
+        
+        // Normalizamos el ángulo para cálculos matemáticos predecibles
         let anguloNormalizado = anguloInicial;
         while (anguloNormalizado <= -180) anguloNormalizado += 360;
         while (anguloNormalizado > 180) anguloNormalizado -= 360;
         
-        // Fuerza de atracción hacia la luz (-90 deg). A mayor generación, más fuerte buscan la luz.
-        let atraccionLuz = 0.15 + (this.gen * 0.05); 
-        // Límite de seguridad para que no se vuelvan completamente rectas
-        atraccionLuz = Math.min(atraccionLuz, 0.6);
-        
-        // Aplicamos la corrección si no es el tronco principal
-        if (this.gen > 0) {
-            this.angulo = anguloNormalizado + (-90 - anguloNormalizado) * atraccionLuz;
-        } else {
-            this.angulo = anguloInicial; // El tronco base respeta su ángulo
-        }
-        // --------------------------------------------------------
+        let targetLuz = -90; // Por defecto arriba
+        let bonoLongitud = 1.0;
 
+        // --- 2. CÁLCULO DE ESTRATEGIA DE LUZ Y DOMINANCIA APICAL ---
+        if (this.gen > 0) {
+            // Lado: 1 = Derecha de la maceta, -1 = Izquierda de la maceta
+            let lado = (anguloNormalizado >= -90 && anguloNormalizado <= 90) ? 1 : -1; 
+            
+            if (this.adn.estilo < 0.20) {
+                // ESTILO 1: Cascada / Llorón (20% probabilidad)
+                // Buscan ir hacia abajo. La gravedad domina.
+                targetLuz = -90 + (110 * lado) + (this.gen * 25 * lado); 
+                bonoLongitud = 1.2; // Crecen más largo porque cuelgan
+            } 
+            else if (this.adn.estilo < 0.70) {
+                // ESTILO 2: Ancho / Aparasolado (50% probabilidad)
+                // Se expanden agresivamente hacia los lados del lienzo
+                targetLuz = -90 + (70 * lado);
+                
+                // Bono de dominancia lateral (crecen más si logran ir en horizontal)
+                let esHorizontal = Math.abs(Math.abs(-90 - anguloNormalizado) - 90) < 35; 
+                if (esHorizontal) bonoLongitud = 1.3;
+            } 
+            else {
+                // ESTILO 3: Vertical / Pino (30% probabilidad)
+                // Compiten fuertemente por ir al cielo vertical
+                targetLuz = -90 + (20 * lado);
+                
+                // Bono de dominancia apical (crecen más si logran ir en vertical)
+                let esVertical = Math.abs(-90 - anguloNormalizado) < 30;
+                if (esVertical) bonoLongitud = 1.3;
+            }
+
+            // Aplicar la rotación suave hacia la meta de luz
+            let fuerzaAtraccion = this.adn.fuerza + (this.gen * 0.02);
+            fuerzaAtraccion = Math.min(fuerzaAtraccion, 0.4); // Tope de seguridad
+
+            this.angulo = anguloNormalizado + (targetLuz - anguloNormalizado) * fuerzaAtraccion;
+        } else {
+            this.angulo = anguloInicial; // El tronco principal siempre nace donde le mandan
+        }
+
+        // --- 3. APLICAR BONOS DE CRECIMIENTO ---
+        let v = params.lenVariance;
+        this.lenMultiplier = (1.0 + rnd(-v, v)) * bonoLongitud;
+        if (this.gen === 0) this.lenMultiplier = (1.0 + rnd(-v * 0.5, v * 0.5));
+        
         let tendenciaCurva = (this.angulo > -90) ? 1 : -1;
         if (this.gen === 0) tendenciaCurva = seededRandom() > 0.5 ? 1 : -1; 
         let spreadCurva = params.maxAngle * 0.6; 
         this.curvatura = (tendenciaCurva * rnd(0, spreadCurva)) + ((-90 - this.angulo) * 0.05); 
-        
-        // --- 2. BONO DE DOMINANCIA APICAL ---
-        let v = params.lenVariance;
-        this.lenMultiplier = this.gen === 0 ? (1.0 + rnd(-v * 0.5, v * 0.5)) : (1.0 + rnd(-v, v));
-        
-        // Calculamos qué tan vertical es la rama (0 = totalmente horizontal o hacia abajo, 1 = apunta directo a -90)
-        let cercaniaVertical = 1 - Math.min(1, Math.abs(-90 - this.angulo) / 90);
-        // Si la rama apunta hacia arriba, le damos un "boost" de hasta 40% en su longitud
-        let bonoApical = 1.0 + (cercaniaVertical * 0.4);
-        
-        if (this.gen > 0) {
-            this.lenMultiplier *= bonoApical;
-        }
-        // ------------------------------------
 
+        // -------------------------------------------------------------
+        
         this.lenObj = 0; this.lenAct = 0; 
         this.grosorBaseAct = 0; this.grosorPuntaAct = 0;
         
@@ -355,8 +382,6 @@ export class Rama {
         if (this.age >= edadBifurcacion && this.gen < params.maxGen - 1 && !this.haBifurcado) {
             let prob = this.gen === 0 ? 0.90 : params.branchProb;
             if (seededRandom() < prob) {
-                // Al bifurcar, el "spread" determinará qué tan abiertas nacen las ramas.
-                // Como luego aplicamos el fototropismo en su constructor, tenderán a curvarse hacia arriba hermosamente.
                 let spread = rnd(15, params.maxAngle);
                 this.crearHijo(this.angulo + spread, params, false);
                 this.crearHijo(this.angulo - spread, params, false);

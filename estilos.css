@@ -1,0 +1,300 @@
+/* estilos.css - Lenguaje Visual Zen / Material Design 3 */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+
+:root {
+    /* Paleta Zen Botánica */
+    --md-sys-color-primary: #7A9E7E;      /* Verde Salvia */
+    --md-sys-color-primary-container: #DCE8DD; 
+    --md-sys-color-secondary: #D48C70;    /* Terracota suave */
+    --md-sys-color-surface: rgba(250, 249, 246, 0.75); /* Arena translúcida */
+    --md-sys-color-on-surface: #2C362F;   /* Gris pizarra */
+    --md-sys-color-outline: #C4C7C5;
+    
+    /* Sombras Material Design (Elevation) */
+    --md-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
+    --md-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
+
+    /* Tipografía */
+    --font-principal: 'Outfit', sans-serif;
+}
+
+/* --- RESET Y BASE --- */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-principal);
+    color: var(--md-sys-color-on-surface);
+    background-color: #121212; 
+    overflow: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Alineación vertical perfecta para los iconos de Google */
+.material-symbols-rounded {
+    font-size: 1.25rem !important;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- PANEL PRINCIPAL (DASHBOARD) --- */
+#dashboard {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    width: 90%;
+    max-width: 420px;
+    background: var(--md-sys-color-surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 28px; /* Esquinas Material 3 */
+    padding: 24px;
+    box-shadow: var(--md-elevation-3);
+    z-index: 100;
+    
+    /* Lógica de apertura/cierre para móviles */
+    transform: translate(-50%, 120%); 
+    transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
+    
+    /* Scroll interno si la pantalla es muy pequeña */
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+/* Ocultar barra de scroll en el panel para un look más limpio */
+#dashboard::-webkit-scrollbar {
+    width: 6px;
+}
+#dashboard::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.15);
+    border-radius: 10px;
+}
+
+/* Estado abierto en móviles */
+#dashboard.open {
+    transform: translate(-50%, 0);
+}
+
+/* En Desktop siempre visible */
+@media (min-width: 768px) {
+    #dashboard {
+        transform: translate(-50%, 0); 
+    }
+    #btn-open-config {
+        display: none; /* Ocultamos el botón de abrir en pantallas grandes */
+    }
+}
+
+/* Modo Zen: Oculta todo dramáticamente */
+body.zen-idle #dashboard {
+    transform: translate(-50%, 150%) !important;
+    opacity: 0;
+}
+body.zen-idle #btn-open-config {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* --- SECCIONES INTERNAS --- */
+.ui-section {
+    margin-bottom: 24px;
+}
+
+.section-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    opacity: 0.6;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+/* --- BOTONES Y GRILLES --- */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.action-btn, .cyclic-btn {
+    background: transparent;
+    border: 1.5px solid var(--md-sys-color-outline);
+    color: var(--md-sys-color-on-surface);
+    font-family: var(--font-principal);
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 10px 14px;
+    border-radius: 100px; /* Pill shape */
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.action-btn:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+.action-btn:active {
+    transform: scale(0.96);
+}
+
+/* Estado Activo (Interruptores Encendidos) */
+.action-btn.active-toggle {
+    background: var(--md-sys-color-primary);
+    color: white;
+    border-color: var(--md-sys-color-primary);
+    box-shadow: var(--md-elevation-1);
+}
+
+.cyclic-btn span {
+    font-weight: 300;
+    opacity: 0.85;
+}
+
+/* --- SLIDERS (RANGOS) MATERIAL 3 --- */
+.control-group {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.control-group label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    background: transparent;
+}
+
+/* Pista del slider */
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 10px; 
+    background: var(--md-sys-color-primary-container);
+    border-radius: 10px;
+    border: none;
+}
+
+/* Pulgar del slider (Thumb) */
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 22px;
+    width: 22px;
+    border-radius: 50%;
+    background: var(--md-sys-color-primary);
+    margin-top: -6px; /* Centrar respecto a la pista */
+    box-shadow: var(--md-elevation-1);
+    cursor: pointer;
+    transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+input[type=range]::-webkit-slider-thumb:active {
+    transform: scale(0.9);
+}
+
+/* Compatibilidad Firefox */
+input[type=range]::-moz-range-track {
+    width: 100%;
+    height: 10px;
+    background: var(--md-sys-color-primary-container);
+    border-radius: 10px;
+    border: none;
+}
+input[type=range]::-moz-range-thumb {
+    height: 22px;
+    width: 22px;
+    border-radius: 50%;
+    background: var(--md-sys-color-primary);
+    border: none;
+    box-shadow: var(--md-elevation-1);
+    cursor: pointer;
+}
+
+/* --- ELEMENTOS FLOTANTES --- */
+
+/* Indicador de Estadísticas (Nodos / Años) */
+#stats {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--md-sys-color-surface);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 8px 20px;
+    border-radius: 100px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    box-shadow: var(--md-elevation-1);
+    z-index: 100;
+    transition: opacity 0.5s ease;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+body.zen-idle #stats {
+    opacity: 0;
+}
+
+/* Botón Flotante Maestro Zen (FAB) */
+#btn-zen-main {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: var(--md-elevation-3);
+    cursor: pointer;
+    z-index: 101;
+    transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#btn-zen-main.active {
+    background: var(--md-sys-color-primary);
+    color: white;
+    border-color: transparent;
+}
+
+#btn-zen-main:hover {
+    transform: scale(1.08);
+}
+
+#btn-zen-main:active {
+    transform: scale(0.95);
+}
+
+/* Input de Semilla Específico */
+#input-semilla:focus {
+    outline: none;
+    border-color: var(--md-sys-color-primary) !important;
+    box-shadow: 0 0 0 2px rgba(122, 158, 126, 0.2);
+}

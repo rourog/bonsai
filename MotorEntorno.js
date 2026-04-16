@@ -234,70 +234,66 @@ generarNubesProcedurales() {
         if (!contenedorNubes) return;
         
         contenedorNubes.innerHTML = '';
-        const numeroNubes = 6 + Math.floor(Math.random() * 5); 
+        // Aumentamos ligeramente la cantidad de nubes para aprovechar mejor las nuevas capas de profundidad
+        const numeroNubes = 8 + Math.floor(Math.random() * 6); 
         
         for(let i = 0; i < numeroNubes; i++) {
             const nube = document.createElement('div');
             nube.className = 'nube procedural';
             
+            // --- FÍSICAS DE PARALLAX ESTRICTO ---
+            // profundidad: 0.0 (fondo/lejos) a 1.0 (frente/cerca)
             const profundidad = Math.random(); 
-            const escala = 0.15 + (profundidad * 0.5); 
-            const duracionViaje = 180 - (profundidad * 140); 
-            const opacidadBase = 0.15 + (profundidad * 0.7); 
+            
+            // 1. Velocidad: Lejos = Lento (280s), Cerca = Rápido (80s)
+            const duracionViaje = 280 - (profundidad * 200); 
+            
+            // 2. Escala estricta: El tamaño base se multiplica por la profundidad (30% a 100% de su tamaño)
+            const multiplicadorTamaño = 0.3 + (profundidad * 0.7); 
+            
+            // 3. Opacidad y Desenfoque Atmosférico
+            const opacidadBase = 0.15 + (profundidad * 0.6); // Más transparentes a lo lejos
+            const desenfoque = 6 - (profundidad * 4); // Más borrosas a lo lejos (6px a 2px)
             const ordenCapa = Math.floor(profundidad * 10);
             
-            const alturaY = Math.random() * 50; 
-            const retrasoInicial = Math.random() * -180; 
+            const alturaY = Math.random() * 55; // Se distribuyen en la mitad superior del cielo
+            const retrasoInicial = Math.random() * -280; // Para que ya haya nubes en pantalla al cargar
 
-            // --- MORFOLOGÍA HORIZONTAL MEJORADA ---
-            // Variabilidad extrema: desde nubes muy pequeñitas (80px) hasta estelas larguísimas (350px)
-            const anchoNube = 80 + Math.random() * 270; 
+            // Aplicamos el multiplicador al tamaño base para garantizar la perspectiva
+            const anchoNube = (120 + Math.random() * 200) * multiplicadorTamaño; 
+            const altoNube = (30 + Math.random() * 30) * multiplicadorTamaño; 
+
             nube.style.width = `${anchoNube}px`;
-            
-            // Altura desvinculada y controlada (máximo 70px) para que sean nubes planas y alargadas
-            const altoNube = 30 + Math.random() * 40; 
             nube.style.height = `${altoNube}px`; 
             
-            // Base plana para que la nube descanse correctamente en el aire
-            let puffsHTML = `<div class="puff base-puff" style="width: 100%; height: 20px; left: 0; bottom: 0;"></div>`;
+            // Base plana escalada
+            let puffsHTML = `<div class="puff base-puff" style="width: 100%; height: ${20 * multiplicadorTamaño}px; left: 0; bottom: 0;"></div>`;
 
             // --- CÚMULOS REALISTAS CON GRADIENTE ---
-            // Aumentamos ligeramente la cantidad base de puffs para asegurar densidad central
-            const numPuffs = Math.floor(anchoNube / 20) + Math.floor(Math.random() * 5); 
+            const numPuffs = Math.floor(anchoNube / (20 * multiplicadorTamaño)) + Math.floor(Math.random() * 4); 
             const centroNube = anchoNube / 2;
 
             for(let j = 0; j < numPuffs; j++) {
-                // Posición aleatoria, pero la usaremos para calcular el gradiente
                 const leftPos = Math.random() * anchoNube;
-                
-                // Distancia al centro (normalizada de 0 a 1)
                 const distanciaAlCentro = Math.abs(leftPos - centroNube) / centroNube;
+                const factorTamaño = 1 - Math.pow(distanciaAlCentro, 2) * 0.7; 
                 
-                // Gradiente de tamaño: más grandes en el centro (distancia 0), más pequeños en extremos (distancia 1)
-                // Usamos una función cuadrática inversa para un cambio más suave y natural
-                const factorTamaño = 1 - Math.pow(distanciaAlCentro, 2) * 0.7; // El tamaño mínimo será ~30% del central
+                // El tamaño del cúmulo respeta la escala general de la nube
+                const sizeW = (20 + Math.random() * 50) * factorTamaño * multiplicadorTamaño; 
+                const sizeH = (20 + Math.random() * (altoNube - 10)) * (factorTamaño * 0.8 + 0.2); 
                 
-                // Calculamos tamaño final aplicando el factor
-                const sizeW = (20 + Math.random() * 60) * factorTamaño; 
-                // La altura también se reduce, pero menos dramáticamente
-                const sizeH = (20 + Math.random() * (altoNube - 15)) * (factorTamaño * 0.8 + 0.2); 
-                
-                // Gradiente de densidad implícito: al ser más pequeños en los extremos, 
-                // la misma cantidad de puffs cubre menos área visual, pareciendo menos denso.
-                // Además, podemos sesgar ligeramente la posición hacia el centro:
-                const sesgoCentral = (Math.random() - 0.5) * anchoNube * factorTamaño * 0.5; // Menor sesgo en extremos
+                const sesgoCentral = (Math.random() - 0.5) * anchoNube * factorTamaño * 0.5; 
                 const leftPosAjustado = Math.max(0, Math.min(anchoNube - sizeW, leftPos + sesgoCentral));
 
-                // Aseguramos puffs redondos en los extremos reales *siempre*
-                if (j === 0) { /* puff extremo izquierdo (tamaño reducido) */
-                    const sW = (20 + Math.random() * 60) * 0.4;
-                    const sH = (20 + Math.random() * (altoNube - 15)) * 0.4;
+                if (j === 0) { 
+                    const sW = (20 + Math.random() * 40) * 0.4 * multiplicadorTamaño;
+                    const sH = (20 + Math.random() * (altoNube - 10)) * 0.4;
                     puffsHTML += `<div class="puff" style="width: ${sW}px; height: ${sH}px; left: 0; bottom: 0;"></div>`;
                     continue;
                 }
-                if (j === 1) { /* puff extremo derecho (tamaño reducido) */
-                    const sW = (20 + Math.random() * 60) * 0.4;
-                    const sH = (20 + Math.random() * (altoNube - 15)) * 0.4;
+                if (j === 1) { 
+                    const sW = (20 + Math.random() * 40) * 0.4 * multiplicadorTamaño;
+                    const sH = (20 + Math.random() * (altoNube - 10)) * 0.4;
                     puffsHTML += `<div class="puff" style="width: ${sW}px; height: ${sH}px; left: ${anchoNube - sW}px; bottom: 0;"></div>`;
                     continue;
                 }
@@ -307,7 +303,9 @@ generarNubesProcedurales() {
 
             nube.innerHTML = puffsHTML;
 
-            nube.style.setProperty('--scale', escala);
+            // Inyectamos todas las físicas al DOM de la nube
+            nube.style.filter = `blur(${desenfoque}px)`; // Sobrescribe el CSS estático
+            nube.style.setProperty('--scale', 1); // La escala CSS ya no es necesaria, escalamos los pixeles matemáticamente
             nube.style.top = `${alturaY}%`;
             nube.style.opacity = opacidadBase;
             nube.style.zIndex = ordenCapa;
@@ -317,6 +315,7 @@ generarNubesProcedurales() {
             contenedorNubes.appendChild(nube);
         }
     }
+    
     inyectarEstilosAtmosfericos() {
         if (document.getElementById('css-entorno')) return;
 

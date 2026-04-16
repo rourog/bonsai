@@ -33,17 +33,14 @@
             width: 100%; height: 100%;
             z-index: 5;
             display: flex;
-            /* Bajamos el anclaje del canvas hacia el fondo de la pantalla */
             align-items: flex-end; 
             justify-content: center;
-            /* Respetamos el espacio de los botones y la barra de Android/iOS */
             padding-bottom: calc(12vh + env(safe-area-inset-bottom, 0px));
             box-sizing: border-box;
         }
 
         svg {
             width: 100%; 
-            /* Evitamos que crezca demasiado y se salga por arriba */
             max-height: 85vh; 
             overflow: visible;
         }
@@ -65,22 +62,23 @@
 
         <div id="stats">CARGANDO...</div>
 
-        <button id="btn-zen-main" title="Modo Zen">
-            <span class="material-symbols-rounded" style="font-size: 32px;">self_improvement</span>
-        </button>
-
-        <div id="quick-actions" class="quick-actions-column">
-            <button id="btn-open-config" class="fab-small" title="Abrir Ajustes">
-                <span class="material-symbols-rounded">settings</span>
-            </button>
-            <button id="btn-fondo-quick" class="fab-small" title="Cielo / Fondo">
-                <span class="material-symbols-rounded">image</span>
-            </button>
+        <div id="right-controls">
             <button id="btn-music-quick" class="fab-small" title="Música">
                 <span class="material-symbols-rounded">music_off</span>
             </button>
             <button id="btn-sfx-quick" class="fab-small" title="Efectos de Sonido">
                 <span class="material-symbols-rounded">volume_off</span>
+            </button>
+            
+            <button id="btn-zen-main" title="Modo Zen">
+                <span class="material-symbols-rounded" style="font-size: 32px;">self_improvement</span>
+            </button>
+
+            <button id="btn-fondo-quick" class="fab-small" title="Cielo / Fondo">
+                <span class="material-symbols-rounded">image</span>
+            </button>
+            <button id="btn-open-config" class="fab-small" title="Abrir Ajustes">
+                <span class="material-symbols-rounded">settings</span>
             </button>
         </div>
 
@@ -141,9 +139,10 @@
                 </div>
             </div>
         </aside>
+
     </div>
 
-    <script type="module" src="./main.js?v=16"></script>
+    <script type="module" src="./main.js?v=17"></script>
 
 </body>
 </html>

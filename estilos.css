@@ -6,22 +6,20 @@
     --md-sys-color-primary: #7A9E7E;      
     --md-sys-color-primary-container: #DCE8DD; 
     --md-sys-color-secondary: #D48C70;    
-    --md-sys-color-surface: rgba(250, 249, 246, 0.75); 
+    --md-sys-color-surface: rgba(250, 249, 246, 0.85); 
     --md-sys-color-on-surface: #2C362F;   
     --md-sys-color-outline: #C4C7C5;
+    --zen-blue: #4A90E2; /* Color Azul Zen para estados activos */
     
-    --md-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
-    --md-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
-
+    --md-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15);
     --font-principal: 'Outfit', sans-serif;
 }
 
 body {
-    margin: 0;
-    padding: 0;
+    margin: 0; padding: 0;
     font-family: var(--font-principal);
     color: var(--md-sys-color-on-surface);
-    background-color: #121212; 
+    background-color: #FAF9F6; 
     overflow: hidden;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
@@ -35,289 +33,117 @@ body {
     justify-content: center;
 }
 
-/* --- PANEL PRINCIPAL (DASHBOARD) --- */
+/* --- PANEL PRINCIPAL --- */
 #dashboard {
     position: absolute;
     bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     left: 50%;
-    width: 90%;
-    max-width: 420px;
+    width: 90%; max-width: 420px;
     background: var(--md-sys-color-surface);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: 28px; 
     padding: 24px;
     box-shadow: var(--md-elevation-3);
     z-index: 100;
     transform: translate(-50%, 150%); 
-    transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
-    max-height: 80vh;
-    overflow-y: auto;
-    opacity: 0;
-    pointer-events: none; 
+    transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
+    max-height: 80vh; overflow-y: auto; opacity: 0; pointer-events: none; 
 }
 
-#dashboard::-webkit-scrollbar { width: 6px; }
-#dashboard::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+#dashboard.open { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
 
-#dashboard.open {
-    transform: translate(-50%, 0);
-    opacity: 1;
-    pointer-events: auto;
-}
+/* Ocultamiento en Inactividad */
+body.zen-idle #dashboard { transform: translate(-50%, 150%) !important; opacity: 0; }
 
-body.zen-idle #dashboard {
-    transform: translate(-50%, 150%) !important;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.ui-section { margin-bottom: 24px; }
-
-.section-label {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 600;
-    opacity: 0.6;
-    letter-spacing: 1px;
-    margin-bottom: 12px;
-}
-
-.grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
+.section-label { display: block; font-size: 0.75rem; font-weight: 600; opacity: 0.6; letter-spacing: 1px; margin-bottom: 12px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .action-btn, .cyclic-btn {
-    background: transparent;
-    border: 1.5px solid var(--md-sys-color-outline);
-    color: var(--md-sys-color-on-surface);
-    font-family: var(--font-principal);
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 10px 14px;
-    border-radius: 100px; 
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 6px;
-    white-space: nowrap;
+    background: transparent; border: 1.5px solid var(--md-sys-color-outline);
+    color: var(--md-sys-color-on-surface); font-family: var(--font-principal);
+    font-size: 0.85rem; font-weight: 600; padding: 10px 14px; border-radius: 100px; 
+    cursor: pointer; transition: all 0.2s ease; display: flex; justify-content: center; align-items: center; gap: 6px;
 }
 
-.action-btn:hover { background: rgba(0,0,0,0.05); }
-.action-btn:active { transform: scale(0.96); }
+.action-btn.active-toggle { background: var(--md-sys-color-primary); color: white; border-color: var(--md-sys-color-primary); }
 
-.action-btn.active-toggle {
-    background: var(--md-sys-color-primary);
-    color: white;
-    border-color: var(--md-sys-color-primary);
-    box-shadow: var(--md-elevation-1);
-}
-
-.cyclic-btn span {
-    font-weight: 300;
-    opacity: 0.85;
-}
-
-.control-group {
-    margin-bottom: 16px;
-    display: flex;
-    flex-direction: column;
-}
-
-.control-group label {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin-bottom: 8px;
-    letter-spacing: 0.3px;
-    text-transform: uppercase;
-}
-
-input[type=range] {
-    -webkit-appearance: none;
-    width: 100%;
-    background: transparent;
-}
-
-input[type=range]::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 10px; 
-    background: var(--md-sys-color-primary-container);
-    border-radius: 10px;
-    border: none;
-}
-
-input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    height: 22px;
-    width: 22px;
-    border-radius: 50%;
-    background: var(--md-sys-color-primary);
-    margin-top: -6px; 
-    box-shadow: var(--md-elevation-1);
-    cursor: pointer;
-    transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
-}
-
-input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
-input[type=range]::-webkit-slider-thumb:active { transform: scale(0.9); }
-
-input[type=range]::-moz-range-track {
-    width: 100%;
-    height: 10px;
-    background: var(--md-sys-color-primary-container);
-    border-radius: 10px;
-    border: none;
-}
-input[type=range]::-moz-range-thumb {
-    height: 22px;
-    width: 22px;
-    border-radius: 50%;
-    background: var(--md-sys-color-primary);
-    border: none;
-    box-shadow: var(--md-elevation-1);
-    cursor: pointer;
-}
-
-/* Indicador de Estadísticas */
-#stats {
-    position: absolute;
-    top: calc(20px + env(safe-area-inset-top, 0px));
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--md-sys-color-surface);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    padding: 8px 20px;
-    border-radius: 100px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    letter-spacing: 1px;
-    box-shadow: var(--md-elevation-1);
-    z-index: 100;
-    transition: opacity 0.5s ease;
-    border: 1px solid rgba(255,255,255,0.2);
-}
-
-body.zen-idle #stats { opacity: 0; }
-
-/* --- NUEVO: CONTROLES LATERALES (COLUMNA DERECHA CENTRADA) --- */
+/* --- CONTROLES LATERALES (ZONA TÁCTIL TRANSPARENTE) --- */
 #right-controls {
     position: absolute;
-    right: 20px;
-    top: 50%;
+    right: 20px; top: 50%;
     transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    z-index: 90;
-    transition: opacity 0.4s ease, transform 0.4s ease;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    z-index: 95;
+    transition: opacity 0.8s ease, transform 0.8s ease;
 }
 
-/* Ocultar toda la columna si el panel grande está abierto */
-body:has(#dashboard.open) #right-controls {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-50%) scale(0.9);
-}
+/* Desaparecen en inactividad */
+body.zen-idle #right-controls { opacity: 0; pointer-events: none; transform: translateY(-50%) translateX(20px); }
+body:has(#dashboard.open) #right-controls { opacity: 0; pointer-events: none; }
 
-/* Desaparecen los pequeños suavemente hacia la derecha cuando hay inactividad */
-body.zen-idle .fab-small {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(20px); 
-}
-
-/* Estilo Base del Botón Rápido Pequeño */
 .fab-small {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: var(--md-sys-color-surface);
-    color: var(--md-sys-color-on-surface);
-    border: 1px solid rgba(255,255,255,0.4);
-    box-shadow: var(--md-elevation-1);
-    cursor: pointer;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: transparent; /* Invisible */
+    color: rgba(44, 54, 47, 0.3); /* Icono muy tenue */
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
     transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.fab-small:hover {
-    transform: scale(1.1);
-    box-shadow: var(--md-elevation-3);
-}
+.fab-small:hover { color: var(--md-sys-color-on-surface); transform: scale(1.1); }
 
-.fab-small:active { transform: scale(0.95); }
-
+/* Función ACTIVADA (Azul Zen) */
 .fab-small.active {
-    background: var(--md-sys-color-primary);
-    color: white;
-    border-color: transparent;
+    color: var(--zen-blue);
+    text-shadow: 0 0 15px rgba(74, 144, 226, 0.5);
 }
 
-.fab-small .material-symbols-rounded { font-size: 22px !important; }
-
-/* --- EL BOTÓN ZEN TRANSLÚCIDO --- */
+/* --- BOTÓN ZEN MAESTRO --- */
 #btn-zen-main {
-    width: 64px;
-    height: 64px;
+    position: relative;
+    width: 68px; height: 68px; border-radius: 50%;
+    background: transparent; border: none;
+    color: rgba(44, 54, 47, 0.4);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.4s ease;
+}
+
+#btn-zen-main:hover { color: var(--md-sys-color-on-surface); }
+#btn-zen-main.active { color: var(--zen-blue); }
+
+/* --- ONDAS PULSÁTILES (RIPPLES) --- */
+.zen-ripple {
+    position: absolute; top: 50%; left: 50%;
+    width: 100%; height: 100%;
+    transform: translate(-50%, -50%) scale(0.5);
     border-radius: 50%;
-    background: transparent;
-    color: var(--md-sys-color-on-surface);
-    border: 1px solid transparent; 
-    box-shadow: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0.4; /* Sutil por defecto */
-    transition: all 0.4s cubic-bezier(0.2, 0, 0, 1);
+    border: 1.5px solid var(--zen-blue);
+    opacity: 0; pointer-events: none;
 }
 
-#btn-zen-main:hover {
-    opacity: 1;
-    background: var(--md-sys-color-surface);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.4);
-    box-shadow: var(--md-elevation-3);
-    transform: scale(1.05);
+#btn-zen-main.active .zen-ripple {
+    animation: pulsoZen 4s infinite cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Modo Zen Activo: Ícono verde suave */
-#btn-zen-main.active {
-    color: var(--md-sys-color-primary);
-    opacity: 0.5;
+#btn-zen-main.active .ripple-1 { animation-delay: 0s; }
+#btn-zen-main.active .ripple-2 { animation-delay: 1.3s; }
+#btn-zen-main.active .ripple-3 { animation-delay: 2.6s; }
+
+@keyframes pulsoZen {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
 }
 
-#btn-zen-main.active:hover {
-    background: var(--md-sys-color-primary);
-    color: white;
-    opacity: 1;
-}
+/* Sliders y Stats */
+input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+input[type=range]::-webkit-slider-runnable-track { height: 10px; background: var(--md-sys-color-primary-container); border-radius: 10px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 22px; width: 22px; border-radius: 50%; background: var(--md-sys-color-primary); margin-top: -6px; }
 
-/* Casi invisible cuando estás meditando (inactividad) */
-body.zen-idle #btn-zen-main {
-    opacity: 0.1;
+#stats {
+    position: absolute; top: calc(20px + env(safe-area-inset-top, 0px));
+    left: 50%; transform: translateX(-50%);
+    background: var(--md-sys-color-surface); padding: 8px 20px; border-radius: 100px;
+    font-size: 0.8rem; font-weight: 600; opacity: 0.8; transition: opacity 0.5s;
 }
-body.zen-idle #btn-zen-main:hover {
-    opacity: 1;
-}
-
-/* Input de Semilla Específico */
-#input-semilla:focus {
-    outline: none;
-    border-color: var(--md-sys-color-primary) !important;
-    box-shadow: 0 0 0 2px rgba(122, 158, 126, 0.2);
-}
+body.zen-idle #stats { opacity: 0; }

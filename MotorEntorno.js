@@ -36,41 +36,79 @@ export class MotorEntorno {
         this.generarSuelo(); 
     }
 
-    // --- HORIZONTE Y PASTO CIRCADIANO ---
     generarSuelo() {
+        // Capa de fondo (Colina y pasto trasero)
         if (!this.domGround) {
             this.domGround = document.createElementNS(SVG_NS, "g");
             this.domGround.setAttribute("id", "capa-suelo");
             this.ctx.layerPot.parentNode.insertBefore(this.domGround, this.ctx.layerPot);
         }
 
-        // Asignamos una clase CSS en lugar de un color fijo para que la animación CSS la controle
-        let html = `<path class="colina-base" d="M -400 30 Q 0 -30 400 30 L 400 250 L -400 250 Z" />`;
+        // Capa frontal (Pasto delante de la maceta)
+        if (!this.domPastoFrente) {
+            this.domPastoFrente = document.createElementNS(SVG_NS, "g");
+            this.domPastoFrente.setAttribute("id", "capa-pasto-frente");
+            // Se inserta DESPUÉS de la maceta, pero ANTES del árbol
+            this.ctx.layerPot.parentNode.insertBefore(this.domPastoFrente, this.ctx.layerTree);
+        }
 
-        for (let i = 0; i < 150; i++) {
-            let x = (Math.random() - 0.5) * 800; 
+        // Colina ensanchada masivamente a 3000px (-1500 a 1500) para pantallas de escritorio
+        let html = `<path class="colina-base" d="M -1500 30 Q 0 -30 1500 30 L 1500 250 L -1500 250 Z" />`;
+        let bladesHtml = '';
+
+        // Aumentamos a 300 briznas para rellenar la colina gigante
+        for (let i = 0; i < 300; i++) {
+            let x = (Math.random() - 0.5) * 3000; 
             
-            let t = (x + 400) / 800; 
+            // Fórmula bezier matemática para asegurar que el pasto nazca en la línea de la colina
+            let t = (x + 1500) / 3000; 
             let curveY = Math.pow(1-t, 2)*30 + 2*(1-t)*t*(-30) + Math.pow(t, 2)*30;
             
-            let y = curveY + Math.random() * 120; 
+            let y = curveY + Math.random() * 150; 
             let perspectiva = 1 + (y - curveY) * 0.015; 
             
             let altura = (8 + Math.random() * 12) * perspectiva;
             let grosor = (1.5 + Math.random() * 2) * perspectiva;
             
-            // Asignamos clases alternadas para crear profundidad cromática
             let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
             let inclinacionIni = Math.random() * 16 - 8; 
 
             let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
             
-            html += `<g transform="translate(${x}, ${y})">
+            bladesHtml += `<g transform="translate(${x}, ${y})">
                         <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
                      </g>`;
         }
-        this.domGround.innerHTML = html;
-        this.blades = this.domGround.querySelectorAll('.blade');
+        this.domGround.innerHTML = html + bladesHtml;
+
+        // GENERAR PASTO FONTAL (Tapando la maceta)
+        let htmlFrente = '';
+        for (let i = 0; i < 30; i++) {
+            // Distribuido solo en la zona de la maceta (aprox -70 a 70)
+            let x = (Math.random() - 0.5) * 140; 
+            // Altura Y que solape la base de las macetas (entre Y=15 y Y=40)
+            let y = 15 + Math.random() * 30; 
+            
+            let perspectiva = 1.6; // Son las más cercanas a la cámara
+            let altura = (8 + Math.random() * 12) * perspectiva;
+            let grosor = (1.5 + Math.random() * 2) * perspectiva;
+            
+            let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
+            let inclinacionIni = Math.random() * 16 - 8; 
+
+            let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
+            
+            htmlFrente += `<g transform="translate(${x}, ${y})">
+                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
+                     </g>`;
+        }
+        this.domPastoFrente.innerHTML = htmlFrente;
+
+        // Unimos todas las hojas en un solo array para la física del viento
+        this.blades = [
+            ...this.domGround.querySelectorAll('.blade'),
+            ...this.domPastoFrente.querySelectorAll('.blade')
+        ];
     }
 
     animarPasto(tiempo, viento) {
@@ -91,28 +129,43 @@ export class MotorEntorno {
 
     renderizarMaceta(forma, color) {
         let svg = '';
+        /* MEJORA: 
+           Quitamos la opacidad del color principal (fill="${color}") para que sean 100% sólidas
+           y el pasto no se transparente. 
+           Las sombras ahora se logran inyectando polígonos negros con baja opacidad encima.
+        */
         switch(forma) {
             case 'estandar':
                 svg = `<rect x="-45" y="0" width="90" height="18" fill="${color}" rx="2"/>
-                       <polygon points="-40,18 40,18 30,35 -30,35" fill="${color}" opacity="0.85"/>
-                       <rect x="-35" y="35" width="8" height="4" fill="${color}" opacity="0.6"/>
-                       <rect x="27" y="35" width="8" height="4" fill="${color}" opacity="0.6"/>`;
+                       <polygon points="-40,18 40,18 30,35 -30,35" fill="${color}"/>
+                       <polygon points="-40,18 40,18 30,35 -30,35" fill="black" opacity="0.2"/>
+                       <rect x="-35" y="35" width="8" height="4" fill="${color}"/>
+                       <rect x="-35" y="35" width="8" height="4" fill="black" opacity="0.4"/>
+                       <rect x="27" y="35" width="8" height="4" fill="${color}"/>
+                       <rect x="27" y="35" width="8" height="4" fill="black" opacity="0.4"/>`;
                 break;
             case 'redonda':
-                svg = `<path d="M -50 5 L 50 5 C 50 40 -50 40 -50 5 Z" fill="${color}" opacity="0.9"/>
+                svg = `<path d="M -50 5 L 50 5 C 50 40 -50 40 -50 5 Z" fill="${color}"/>
+                       <path d="M -50 5 L 50 5 C 50 40 -50 40 -50 5 Z" fill="black" opacity="0.15"/>
                        <rect x="-53" y="0" width="106" height="6" fill="${color}" rx="2"/>
-                       <rect x="-20" y="30" width="40" height="4" fill="${color}" opacity="0.6"/>`;
+                       <rect x="-20" y="30" width="40" height="4" fill="${color}"/>
+                       <rect x="-20" y="30" width="40" height="4" fill="black" opacity="0.4"/>`;
                 break;
             case 'alta':
-                svg = `<polygon points="-35,6 35,6 22,70 -22,70" fill="${color}" opacity="0.85"/>
+                svg = `<polygon points="-35,6 35,6 22,70 -22,70" fill="${color}"/>
+                       <polygon points="-35,6 35,6 22,70 -22,70" fill="black" opacity="0.2"/>
                        <rect x="-40" y="0" width="80" height="6" fill="${color}" rx="1"/>
-                       <rect x="-22" y="70" width="44" height="4" fill="${color}" opacity="0.6"/>`;
+                       <rect x="-22" y="70" width="44" height="4" fill="${color}"/>
+                       <rect x="-22" y="70" width="44" height="4" fill="black" opacity="0.4"/>`;
                 break;
             case 'plana':
                 svg = `<rect x="-80" y="0" width="160" height="10" fill="${color}" rx="1"/>
-                       <polygon points="-75,10 75,10 70,20 -70,20" fill="${color}" opacity="0.85"/>
-                       <rect x="-65" y="20" width="12" height="4" fill="${color}" opacity="0.6"/>
-                       <rect x="53" y="20" width="12" height="4" fill="${color}" opacity="0.6"/>`;
+                       <polygon points="-75,10 75,10 70,20 -70,20" fill="${color}"/>
+                       <polygon points="-75,10 75,10 70,20 -70,20" fill="black" opacity="0.2"/>
+                       <rect x="-65" y="20" width="12" height="4" fill="${color}"/>
+                       <rect x="-65" y="20" width="12" height="4" fill="black" opacity="0.4"/>
+                       <rect x="53" y="20" width="12" height="4" fill="${color}"/>
+                       <rect x="53" y="20" width="12" height="4" fill="black" opacity="0.4"/>`;
                 break;
         }
         this.ctx.layerPot.innerHTML = svg;
@@ -285,18 +338,15 @@ export class MotorEntorno {
 
             body.bg-sky-active .nube.procedural { animation-play-state: running; }
 
-            /* --- ESTILOS DEL HORIZONTE Y PASTO --- */
-            /* Colores Base (Modo Estudio, cuando el cielo está apagado) */
+            /* ESTILOS DEL HORIZONTE Y PASTO */
             .colina-base { fill: #4A6B53; transition: fill 2s ease; }
             .pasto-tipo1 { fill: #5B8266; transition: fill 2s ease; }
             .pasto-tipo2 { fill: #689675; transition: fill 2s ease; }
 
-            /* Animaciones de ciclo cuando el cielo está encendido */
             body.bg-sky-active .colina-base { animation: cicloSuelo ${cicloSegundos}s infinite linear; }
             body.bg-sky-active .pasto-tipo1 { animation: cicloPasto1 ${cicloSegundos}s infinite linear; }
             body.bg-sky-active .pasto-tipo2 { animation: cicloPasto2 ${cicloSegundos}s infinite linear; }
 
-            /* --- KEYFRAMES --- */
             @keyframes rotacionCeleste { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 50% { transform: rotate(180deg); } 75% { transform: rotate(270deg); } 100% { transform: rotate(360deg); } }
             @keyframes opacidadLuna { 0%, 35% { opacity: 0; } 45%, 55% { opacity: 0.9; } 65%, 100% { opacity: 0; } }
             
@@ -311,25 +361,24 @@ export class MotorEntorno {
             }
             @keyframes parpadeo { 0% { filter: opacity(0.3); } 100% { filter: opacity(1); } }
 
-            /* Sincronización perfecta del color de la tierra con las horas del día */
             @keyframes cicloSuelo {
-                0%, 25% { fill: #4A6B53; }     /* Día: Verde Salvia Mediano */
-                35% { fill: #2c3a2f; }         /* Atardecer: Verde Oliva Oscuro */
-                45%, 75% { fill: #111814; }    /* Noche: Casi Negro */
-                85% { fill: #2c3a2f; }         /* Amanecer: Verde Oliva Oscuro */
-                95%, 100% { fill: #4A6B53; }   /* Día */
+                0%, 25% { fill: #4A6B53; }     
+                35% { fill: #2c3a2f; }         
+                45%, 75% { fill: #111814; }    
+                85% { fill: #2c3a2f; }         
+                95%, 100% { fill: #4A6B53; }   
             }
             @keyframes cicloPasto1 {
-                0%, 25% { fill: #5B8266; }     /* Día */
+                0%, 25% { fill: #5B8266; }     
                 35% { fill: #354a3a; } 
-                45%, 75% { fill: #1a261f; }    /* Noche */
+                45%, 75% { fill: #1a261f; }    
                 85% { fill: #354a3a; } 
                 95%, 100% { fill: #5B8266; } 
             }
             @keyframes cicloPasto2 {
-                0%, 25% { fill: #689675; }     /* Día */
+                0%, 25% { fill: #689675; }     
                 35% { fill: #3d5743; } 
-                45%, 75% { fill: #213328; }    /* Noche */
+                45%, 75% { fill: #213328; }    
                 85% { fill: #3d5743; } 
                 95%, 100% { fill: #689675; } 
             }

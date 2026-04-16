@@ -32,21 +32,28 @@ export function rnd(min, max) {
 }
 // ---------------------------------------------
 
+// --- DICCIONARIO BOTÁNICO AMPLIADO ---
 export const DICCIONARIO_BOTANICO = {
     hojas: [
         { id: 'huso', nombre: 'Huso Afilado' },
         { id: 'ovalada', nombre: 'Oval Estándar' },
         { id: 'circular', nombre: 'Circular Brote' },
         { id: 'larga', nombre: 'Larga Sauce' },
-        { id: 'arce', nombre: 'Arce Lobulada' }
+        { id: 'arce', nombre: 'Arce Lobulada' },
+        { id: 'palmera', nombre: 'Fronda Palmera' },
+        { id: 'cannabis', nombre: 'Palmeada (Cannabis)' }
     ],
     flora: [
-        { id: 'aleatorio', nombre: 'Caos' },
-        { id: 'flor-rosa', nombre: 'Flores Rosas' },
-        { id: 'flor-blanca', nombre: 'Flores Blancas' },
-        { id: 'flor-amarilla', nombre: 'Flores Amarillas' },
+        { id: 'aleatorio', nombre: 'Caos Total' },
+        { id: 'flor-rosa', nombre: 'Cerezo (Rosa)' },
+        { id: 'flor-blanca', nombre: 'Ciruelo (Blanco)' },
+        { id: 'flor-amarilla', nombre: 'Flor Amarilla' },
+        { id: 'flor-azul', nombre: 'Loto Azul' },
+        { id: 'flor-morada', nombre: 'Jacaranda' },
         { id: 'limon', nombre: 'Limones' },
+        { id: 'naranja', nombre: 'Naranjas' },
         { id: 'baya-roja', nombre: 'Baya Roja' },
+        { id: 'mora', nombre: 'Zarzamoras' },
         { id: 'platano', nombre: 'Plátanos' },
         { id: 'ninguno', nombre: 'Ninguno' }
     ]
@@ -77,6 +84,7 @@ const BARK_PALETTE = [
 
 const LEAF_COLORS = ['#1f362a', '#2c4c3b', '#3e6e5a', '#5d7d3c'];
 
+// --- MOTOR GEOMÉTRICO DE HOJAS ---
 export function generarPathHoja(forma, w, l) {
     switch(forma) {
         case 'huso': return `M 0 0 Q ${w} ${l/2} 0 ${l} Q ${-w} ${l/2} 0 0 Z`;
@@ -84,6 +92,9 @@ export function generarPathHoja(forma, w, l) {
         case 'larga': return `M 0 0 Q ${w*0.8} ${l} 0 ${l*2.5} Q ${-w*0.8} ${l} 0 0 Z`;
         case 'circular': return `M 0 ${w*1.2} A ${w*1.2} ${w*1.2} 0 1 0 0 ${-w*1.2+0.01} Z`; 
         case 'arce': return `M 0 0 L ${w} ${l*0.3} L ${w*2.5} 0 L ${w*1.2} ${l*0.6} L 0 ${l} L ${-w*1.2} ${l*0.6} L ${-w*2.5} 0 L ${-w} ${l*0.3} Z`;
+        // Nuevas geometrías de hojas
+        case 'palmera': return `M 0 0 L ${w*0.8} ${l*0.2} L ${w*0.2} ${l*0.25} L ${w*1.2} ${l*0.5} L ${w*0.3} ${l*0.55} L ${w*0.8} ${l*0.8} L 0 ${l} L ${-w*0.8} ${l*0.8} L ${-w*0.3} ${l*0.55} L ${-w*1.2} ${l*0.5} L ${-w*0.2} ${l*0.25} L ${-w*0.8} ${l*0.2} Z`;
+        case 'cannabis': return `M 0 0 L ${w*2} ${l*0.3} L ${w*0.6} ${l*0.35} L ${w*2.5} ${l*0.7} L ${w*0.5} ${l*0.65} L 0 ${l} L ${-w*0.5} ${l*0.65} L ${-w*2.5} ${l*0.7} L ${-w*0.6} ${l*0.35} L ${-w*2} ${l*0.3} Z`;
         default: return `M 0 0 Q ${w} ${l/2} 0 ${l} Q ${-w} ${l/2} 0 0 Z`; 
     }
 }
@@ -98,12 +109,15 @@ export class FrutoFlor {
         this.podado = false;
         
         if (tipo === 'aleatorio') {
-            const tipos = ['flor-rosa', 'flor-blanca', 'flor-amarilla', 'limon', 'baya-roja', 'platano'];
+            const tipos = ['flor-rosa', 'flor-blanca', 'flor-amarilla', 'flor-azul', 'flor-morada', 'limon', 'naranja', 'baya-roja', 'mora', 'platano'];
             tipo = tipos[Math.floor(seededRandom() * tipos.length)];
         }
         
         const data = this.obtenerDatosMorfologicos(tipo);
-        this.anguloCae = (tipo === 'limon' || tipo === 'platano') ? rnd(10, 45) * (seededRandom() > 0.5 ? 1 : -1) : rnd(-15, 15);
+        
+        // Efecto Gravedad: Los frutos caen hacia abajo, las flores miran más hacia arriba/frente
+        let esFruto = ['limon', 'platano', 'naranja', 'mora'].includes(tipo);
+        this.anguloCae = esFruto ? rnd(10, 45) * (seededRandom() > 0.5 ? 1 : -1) : rnd(-15, 15);
 
         this.dom = document.createElementNS(SVG_NS, "path");
         this.dom.setAttribute("d", data.path);
@@ -125,8 +139,12 @@ export class FrutoFlor {
             case 'flor-rosa': return { fill: '#e8a0bf', path: "M 0 -4 Q 3 -3 4 0 Q 3 3 0 4 Q -3 3 -4 0 Q -3 -3 0 -4 Z" };
             case 'flor-blanca': return { fill: '#f8f9fa', path: "M 0 -4 Q 3 -3 4 0 Q 3 3 0 4 Q -3 3 -4 0 Q -3 -3 0 -4 Z" };
             case 'flor-amarilla': return { fill: '#fadd4b', path: "M 0 -4 Q 3 -3 4 0 Q 3 3 0 4 Q -3 3 -4 0 Q -3 -3 0 -4 Z" };
+            case 'flor-azul': return { fill: '#5DADE2', path: "M 0 -4 Q 3 -3 4 0 Q 3 3 0 4 Q -3 3 -4 0 Q -3 -3 0 -4 Z" };
+            case 'flor-morada': return { fill: '#9b59b6', path: "M 0 -4 Q 3 -3 4 0 Q 3 3 0 4 Q -3 3 -4 0 Q -3 -3 0 -4 Z" };
             case 'limon': return { fill: '#fadd4b', path: "M 0 -5 C 4 -5 5 -2 5 0 C 5 3 3 5 0 6 C -3 5 -5 3 -5 0 C -5 -2 -4 -5 0 -5 Z" };
+            case 'naranja': return { fill: '#e67e22', path: "M 0 -4.5 A 4.5 4.5 0 1 0 0 4.5 A 4.5 4.5 0 1 0 0 -4.5 Z" };
             case 'baya-roja': return { fill: '#e74c3c', path: "M 0 -3 A 3 3 0 1 0 0 3 A 3 3 0 1 0 0 -3 Z M 3 2 A 2.5 2.5 0 1 0 3 -3 A 2.5 2.5 0 1 0 3 2 Z" };
+            case 'mora': return { fill: '#5B2C6F', path: "M 0 -3 A 2.5 2.5 0 1 0 0 2 A 2.5 2.5 0 1 0 0 -3 Z M -2 1 A 2.5 2.5 0 1 0 -2 6 A 2.5 2.5 0 1 0 -2 1 Z M 2 1 A 2.5 2.5 0 1 0 2 6 A 2.5 2.5 0 1 0 2 1 Z" };
             case 'platano': return { fill: '#f1c40f', path: "M 2 -5 Q 5 0 2 5 Q 0 4 -1 0 Q 0 -4 2 -5 Z" };
             default: return { fill: '#e8a0bf', path: "M 0 -4 Q 3 -3 4 0 Q 3 3 0 4 Q -3 3 -4 0 Q -3 -3 0 -4 Z" };
         }
@@ -239,8 +257,10 @@ export class Rama {
             this.baseBarkColor = this.padre.baseBarkColor;
         } else {
             this.adn = {
-                estilo: seededRandom(), // 0.0 a 1.0 (Silueta principal)
-                fuerza: rnd(0.1, 0.4)   // Elasticidad hacia la luz
+                estilo: seededRandom(), 
+                fuerza: rnd(0.1, 0.4),  
+                maxVigor: rnd(1.2, 2.0), 
+                escalaGlobal: rnd(0.5, 1.15) 
             };
             this.baseBarkColor = BARK_PALETTE[Math.floor(this.seed % BARK_PALETTE.length)];
         }
@@ -252,8 +272,6 @@ export class Rama {
         while (anguloNormalizado <= -180) anguloNormalizado += 360;
         while (anguloNormalizado > 180) anguloNormalizado -= 360;
         
-        // ¡LA CLAVE! Respetamos el ángulo inicial de bifurcación para evitar ramas paralelas.
-        // El fototropismo actuará sobre la curvatura más adelante.
         this.angulo = anguloNormalizado; 
 
         let targetLuz = -90; 
@@ -265,47 +283,40 @@ export class Rama {
         if (this.gen > 0) {
             let lado = (anguloNormalizado >= -90 && anguloNormalizado <= 90) ? 1 : -1; 
             
-            // Definir preferencias según el ADN
             if (this.adn.estilo < 0.20) {
-                targetLuz = -90 + (110 * lado) + (this.gen * 25 * lado); // Cascada
+                targetLuz = -90 + (110 * lado) + (this.gen * 25 * lado); 
                 preferenciaUp = -1.0; 
                 preferenciaOut = 1.2;
             } else if (this.adn.estilo < 0.70) {
-                targetLuz = -90 + (70 * lado); // Aparasolado
+                targetLuz = -90 + (70 * lado); 
                 preferenciaUp = 0.2; 
                 preferenciaOut = 1.5;
             } else {
-                targetLuz = -90 + (20 * lado); // Vertical
+                targetLuz = -90 + (20 * lado); 
                 preferenciaUp = 1.5; 
                 preferenciaOut = 0.2;
             }
 
-            // Cálculo de Vectores
-            let vecY = -Math.sin(this.angulo * Math.PI / 180); // +1 si va arriba, -1 si va abajo
-            let vecX = Math.cos(this.angulo * Math.PI / 180);  // +1 si va derecha, -1 si va izq
+            let vecY = -Math.sin(this.angulo * Math.PI / 180); 
+            let vecX = Math.cos(this.angulo * Math.PI / 180);  
             
-            // Determinar si crece "hacia afuera" del tronco central (0)
             let xSign = this.startX > 5 ? 1 : (this.startX < -5 ? -1 : (vecX >= 0 ? 1 : -1));
-            let outwardness = vecX * xSign; // +1 huye del tronco, -1 va hacia el tronco
+            let outwardness = vecX * xSign; 
             let upwardness = vecY; 
 
-            // Evaluar vigor comparando vectores con el ADN
             let vigor = (outwardness * preferenciaOut) + (upwardness * preferenciaUp);
             vigor = vigor / (Math.abs(preferenciaOut) + Math.abs(preferenciaUp)); 
 
             let bonoDir = 0;
             if (vigor > 0) {
-                // Boost agresivo y altamante aleatorio para ramas ganadoras (hasta +180% de largo)
-                bonoDir = vigor * rnd(0.2, 1.8); 
+                bonoDir = vigor * rnd(0.1, this.adn.maxVigor - 1.0); 
             } else {
-                // Castigo para ramas que apuntan mal (hasta -80% de largo)
                 bonoDir = vigor * rnd(0.2, 0.8); 
             }
             
             bonoLongitud = 1.0 + bonoDir;
-            bonoLongitud = Math.max(0.2, Math.min(2.8, bonoLongitud)); // Topes de seguridad física
+            bonoLongitud = Math.max(0.2, Math.min(this.adn.maxVigor, bonoLongitud)); 
 
-            // Curvatura hacia la meta de luz (En lugar de pellizcar la base)
             let diffAtraccion = targetLuz - this.angulo;
             while (diffAtraccion <= -180) diffAtraccion += 360;
             while (diffAtraccion > 180) diffAtraccion -= 360;
@@ -315,13 +326,15 @@ export class Rama {
             this.curvatura = rnd(-10, 10) + (diffAtraccion * atraccion);
 
         } else {
-            // El tronco tiene curvatura orgánica pura
             this.curvatura = (seededRandom() > 0.5 ? 1 : -1) * rnd(5, params.maxAngle * 0.5) + ((-90 - this.angulo) * 0.1); 
         }
 
         let v = params.lenVariance;
-        this.lenMultiplier = (1.0 + rnd(-v, v)) * bonoLongitud;
-        if (this.gen === 0) this.lenMultiplier = (1.0 + rnd(-v * 0.5, v * 0.5));
+        this.lenMultiplier = ((1.0 + rnd(-v, v)) * bonoLongitud) * this.adn.escalaGlobal;
+        
+        if (this.gen === 0) {
+            this.lenMultiplier = (1.0 + rnd(-v * 0.5, v * 0.5)) * this.adn.escalaGlobal;
+        }
         
         // -------------------------------------------------------------
         
@@ -399,12 +412,10 @@ export class Rama {
         if (this.age >= edadBifurcacion && this.gen < params.maxGen - 1 && !this.haBifurcado) {
             let prob = this.gen === 0 ? 0.90 : params.branchProb;
             if (seededRandom() < prob) {
-                // SEGURIDAD ANTI-PARALELISMO: Aseguramos un mínimo de 20° de separación siempre
                 let spread = rnd(20, params.maxAngle);
                 this.crearHijo(this.angulo + spread, params, false);
                 this.crearHijo(this.angulo - spread, params, false);
             } else {
-                // RAMA DE CONTINUACIÓN: Damos un quiebre mínimo para que no se vea como un palo recto
                 let kink = rnd(10, 25) * (seededRandom() > 0.5 ? 1 : -1);
                 this.crearHijo(this.angulo + kink, params, false);
             }

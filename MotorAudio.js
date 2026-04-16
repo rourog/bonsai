@@ -17,12 +17,11 @@ export class MotorAudio {
         this.ambientTimeout = null;
         this.zenTimeoutId = null;
         this.lastPopTime = 0; 
-        
-        // NUEVO: Limitador de CPU para el viento
         this.lastWindUpdate = 0; 
 
         this.chimeNotes = [1200, 1500, 1800, 2100, 2600, 3200];
         
+        // --- Variables del Sintetizador Musical Zen ---
         this.musicMaster = null;
         this.musicDry = null;
         this.musicReverbSend = null;
@@ -129,8 +128,6 @@ export class MotorAudio {
     actualizarViento(tiempoViento, intensidadCien) {
         if (!this.sfxEnabled || !this.windGainNode || !this.audioCtx) return;
         
-        // OPTIMIZACIÓN 1: Limitador de CPU. 
-        // En lugar de calcular esto 60 veces por segundo, lo hacemos solo 10 veces.
         const now = performance.now();
         if (now - this.lastWindUpdate < 100) return; 
         this.lastWindUpdate = now;
@@ -168,24 +165,26 @@ export class MotorAudio {
         this.ambientTimeout = setTimeout(this.ecosistemaAmbiental, 3000 + Math.random() * 7000);
     }
 
-    // A partir de aquí, todas las funciones de sonido efímero incluyen .onended = disconnect
-    // para destruir los nodos y liberar memoria RAM al instante.
-
     playCarpintero(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
         const golpes = 6 + Math.floor(Math.random() * 5);
         for(let i=0; i<golpes; i++) {
             const noise = this.crearFuenteRuido();
             const filtro = this.audioCtx.createBiquadFilter();
-            filtro.type = 'bandpass'; filtro.frequency.value = 1200; 
+            filtro.type = 'bandpass'; 
+            filtro.frequency.value = 800 + (Math.random() * 200); 
+            filtro.Q.value = 3; 
+            
             const gain = this.audioCtx.createGain();
             noise.connect(filtro).connect(gain).connect(this.masterGainSFX);
             const t = tiempoActual + (i * 0.06); 
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.6, t + 0.005); 
+            
+            // Volumen reducido al 12% (0.12)
+            gain.gain.linearRampToValueAtTime(0.12, t + 0.005); 
             gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); 
+            
             noise.stop(t + 0.05);
-            // OPTIMIZACIÓN 2: Recolector de basura agresivo
             noise.onended = () => { try { noise.disconnect(); filtro.disconnect(); gain.disconnect(); } catch(e){} };
         }
     }
@@ -206,17 +205,27 @@ export class MotorAudio {
 
     playPezSplash(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
+        
+        // Bloop líquido y orgánico
         const osc = this.audioCtx.createOscillator();
         const gainBloop = this.audioCtx.createGain();
-        osc.type = 'sine'; osc.frequency.setValueAtTime(400, tiempoActual); osc.frequency.exponentialRampToValueAtTime(150, tiempoActual + 0.15); 
-        gainBloop.gain.setValueAtTime(0, tiempoActual); gainBloop.gain.linearRampToValueAtTime(0.3, tiempoActual + 0.02); gainBloop.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.25);
+        osc.type = 'sine'; 
+        osc.frequency.setValueAtTime(400, tiempoActual); 
+        osc.frequency.exponentialRampToValueAtTime(150, tiempoActual + 0.15); 
+        gainBloop.gain.setValueAtTime(0, tiempoActual); 
+        gainBloop.gain.linearRampToValueAtTime(0.3, tiempoActual + 0.02); 
+        gainBloop.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.25);
         osc.connect(gainBloop).connect(this.masterGainSFX);
 
+        // Swish agudo para la espuma
         const noise = this.crearFuenteRuido();
         const filtroNoise = this.audioCtx.createBiquadFilter();
-        filtroNoise.type = 'bandpass'; filtroNoise.frequency.value = 1200; 
+        filtroNoise.type = 'bandpass'; 
+        filtroNoise.frequency.value = 1200; 
         const gainNoise = this.audioCtx.createGain();
-        gainNoise.gain.setValueAtTime(0, tiempoActual); gainNoise.gain.linearRampToValueAtTime(0.1, tiempoActual + 0.02); gainNoise.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.2);
+        gainNoise.gain.setValueAtTime(0, tiempoActual); 
+        gainNoise.gain.linearRampToValueAtTime(0.1, tiempoActual + 0.02); 
+        gainNoise.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.2);
         noise.connect(filtroNoise).connect(gainNoise).connect(this.masterGainSFX);
 
         osc.start(tiempoActual); osc.stop(tiempoActual + 0.3); noise.stop(tiempoActual + 0.25);
@@ -251,13 +260,21 @@ export class MotorAudio {
             const osc = this.audioCtx.createOscillator();
             const gain = this.audioCtx.createGain();
             const filter = this.audioCtx.createBiquadFilter();
+            
             osc.type = 'square';
             osc.frequency.setValueAtTime(150 + Math.random() * 200, time);
             osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
-            filter.type = 'bandpass'; filter.frequency.value = 1000 + Math.random() * 2000; filter.Q.value = 2;
+            
+            filter.type = 'bandpass'; 
+            filter.frequency.value = 1000 + Math.random() * 2000; 
+            filter.Q.value = 2;
+            
             gain.gain.setValueAtTime(0, time);
-            gain.gain.linearRampToValueAtTime(0.3, time + 0.01);
+            
+            // Volumen reducido drásticamente al 8% (0.08)
+            gain.gain.linearRampToValueAtTime(0.08, time + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+            
             osc.connect(filter).connect(gain).connect(this.masterGainSFX);
             osc.start(time); osc.stop(time + 0.2);
             osc.onended = () => { try { osc.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
@@ -278,9 +295,11 @@ export class MotorAudio {
             const freq = 600 + Math.random() * 800; 
             osc.frequency.setValueAtTime(freq, time);
             osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.1);
+            
             gain.gain.setValueAtTime(0, time);
             gain.gain.linearRampToValueAtTime(0.06, time + 0.01); 
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15); 
+            
             osc.start(time); osc.stop(time + 0.15);
             osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
         } catch (e) {}
@@ -432,7 +451,6 @@ export class MotorAudio {
             osc.start(time); lfo.start(time);
             osc.stop(time + duration + 0.1); lfo.stop(time + duration + 0.1);
 
-            // Destrucción profunda de sintetizador
             osc.onended = () => { try { osc.disconnect(); filter.disconnect(); amp.disconnect(); lfo.disconnect(); lfoGain.disconnect(); } catch(e){} };
         } catch(e) {}
     }

@@ -4,10 +4,11 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 export const DICCIONARIO_ENTORNO = {
     macetas: [
-        { id: 'estandar', nombre: 'Rectangular' },
-        { id: 'redonda', nombre: 'Tazón Suave' },
-        { id: 'alta', nombre: 'Alta Cascada' },
-        { id: 'plana', nombre: 'Plana Bosque' }
+        // NUEVO: Agregamos baseY (la coordenada Y del fondo exacto de cada maceta)
+        { id: 'estandar', nombre: 'Rectangular', baseY: 39 },
+        { id: 'redonda', nombre: 'Tazón Suave', baseY: 34 },
+        { id: 'alta', nombre: 'Alta Cascada', baseY: 74 },
+        { id: 'plana', nombre: 'Plana Bosque', baseY: 24 }
     ],
     esmaltes: [
         { id: '#c05a41', nombre: 'Terracota' },
@@ -30,111 +31,21 @@ export class MotorEntorno {
         this.ctx = ctx; 
         this.skyEnabled = false;
         this.skyContainer = document.getElementById('sky-bg');
+        this.macetaActual = DICCIONARIO_ENTORNO.macetas[0]; // Inicialización por defecto
         
         this.inyectarEstilosAtmosfericos();
         this.construirCielo();
         this.generarSuelo(); 
     }
 
-    generarSuelo() {
-        // Capa de fondo (Colina y pasto trasero)
-        if (!this.domGround) {
-            this.domGround = document.createElementNS(SVG_NS, "g");
-            this.domGround.setAttribute("id", "capa-suelo");
-            this.ctx.layerPot.parentNode.insertBefore(this.domGround, this.ctx.layerPot);
-        }
+    renderizarMaceta(formaId, color) {
+        // Encontramos la maceta actual para saber su profundidad (baseY)
+        const forma = DICCIONARIO_ENTORNO.macetas.find(m => m.id === formaId) || DICCIONARIO_ENTORNO.macetas[0];
+        this.macetaActual = forma;
 
-        // Capa frontal (Pasto delante de la maceta)
-        if (!this.domPastoFrente) {
-            this.domPastoFrente = document.createElementNS(SVG_NS, "g");
-            this.domPastoFrente.setAttribute("id", "capa-pasto-frente");
-            // Se inserta DESPUÉS de la maceta, pero ANTES del árbol
-            this.ctx.layerPot.parentNode.insertBefore(this.domPastoFrente, this.ctx.layerTree);
-        }
-
-        // Colina ensanchada masivamente a 3000px (-1500 a 1500) para pantallas de escritorio
-        let html = `<path class="colina-base" d="M -1500 30 Q 0 -30 1500 30 L 1500 250 L -1500 250 Z" />`;
-        let bladesHtml = '';
-
-        // Aumentamos a 300 briznas para rellenar la colina gigante
-        for (let i = 0; i < 300; i++) {
-            let x = (Math.random() - 0.5) * 3000; 
-            
-            // Fórmula bezier matemática para asegurar que el pasto nazca en la línea de la colina
-            let t = (x + 1500) / 3000; 
-            let curveY = Math.pow(1-t, 2)*30 + 2*(1-t)*t*(-30) + Math.pow(t, 2)*30;
-            
-            let y = curveY + Math.random() * 150; 
-            let perspectiva = 1 + (y - curveY) * 0.015; 
-            
-            let altura = (8 + Math.random() * 12) * perspectiva;
-            let grosor = (1.5 + Math.random() * 2) * perspectiva;
-            
-            let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
-            let inclinacionIni = Math.random() * 16 - 8; 
-
-            let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
-            
-            bladesHtml += `<g transform="translate(${x}, ${y})">
-                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
-                     </g>`;
-        }
-        this.domGround.innerHTML = html + bladesHtml;
-
-        // GENERAR PASTO FONTAL (Tapando la maceta)
-        let htmlFrente = '';
-        for (let i = 0; i < 30; i++) {
-            // Distribuido solo en la zona de la maceta (aprox -70 a 70)
-            let x = (Math.random() - 0.5) * 140; 
-            // Altura Y que solape la base de las macetas (entre Y=15 y Y=40)
-            let y = 15 + Math.random() * 30; 
-            
-            let perspectiva = 1.6; // Son las más cercanas a la cámara
-            let altura = (8 + Math.random() * 12) * perspectiva;
-            let grosor = (1.5 + Math.random() * 2) * perspectiva;
-            
-            let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
-            let inclinacionIni = Math.random() * 16 - 8; 
-
-            let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
-            
-            htmlFrente += `<g transform="translate(${x}, ${y})">
-                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
-                     </g>`;
-        }
-        this.domPastoFrente.innerHTML = htmlFrente;
-
-        // Unimos todas las hojas en un solo array para la física del viento
-        this.blades = [
-            ...this.domGround.querySelectorAll('.blade'),
-            ...this.domPastoFrente.querySelectorAll('.blade')
-        ];
-    }
-
-    animarPasto(tiempo, viento) {
-        if (!this.blades) return;
-        const fuerza = viento * 45; 
-        
-        this.blades.forEach((blade) => {
-            const x = parseFloat(blade.getAttribute('data-x'));
-            const tilt = parseFloat(blade.getAttribute('data-tilt'));
-            
-            const fase = x * 0.015; 
-            const ruido = Math.sin(tiempo * 3.5 + fase);
-            const oscilacion = tilt + (viento * 20) + (ruido * fuerza * 0.6);
-            
-            blade.setAttribute('transform', `rotate(${oscilacion})`);
-        });
-    }
-
-    renderizarMaceta(forma, color) {
         let svg = '';
-        /* MEJORA: 
-           Quitamos la opacidad del color principal (fill="${color}") para que sean 100% sólidas
-           y el pasto no se transparente. 
-           Las sombras ahora se logran inyectando polígonos negros con baja opacidad encima.
-        */
-        switch(forma) {
+        // Las macetas ahora son sólidas. La sombra se dibuja encima para dar volumen sin transparencia.
+        switch(forma.id) {
             case 'estandar':
                 svg = `<rect x="-45" y="0" width="90" height="18" fill="${color}" rx="2"/>
                        <polygon points="-40,18 40,18 30,35 -30,35" fill="${color}"/>
@@ -169,6 +80,100 @@ export class MotorEntorno {
                 break;
         }
         this.ctx.layerPot.innerHTML = svg;
+        
+        // REGENERAMOS EL SUELO PARA QUE SE ANCLE A LA NUEVA BASE
+        this.generarSuelo();
+    }
+
+    generarSuelo() {
+        if (!this.domGround) {
+            this.domGround = document.createElementNS(SVG_NS, "g");
+            this.domGround.setAttribute("id", "capa-suelo");
+            this.ctx.layerPot.parentNode.insertBefore(this.domGround, this.ctx.layerPot);
+        }
+
+        if (!this.domPastoFrente) {
+            this.domPastoFrente = document.createElementNS(SVG_NS, "g");
+            this.domPastoFrente.setAttribute("id", "capa-pasto-frente");
+            // Se inserta DESPUÉS de la maceta, pero ANTES del árbol
+            this.ctx.layerPot.parentNode.insertBefore(this.domPastoFrente, this.ctx.layerTree);
+        }
+
+        // Extraemos la altura dinámica de la maceta actual
+        const baseY = this.macetaActual.baseY;
+
+        // Curva dramática de colina. El vértice central es exactamente baseY
+        let html = `<path class="colina-base" d="M -1500 ${baseY + 200} Q 0 ${baseY - 200} 1500 ${baseY + 200} L 1500 600 L -1500 600 Z" />`;
+        
+        let bladesHtml = '';
+
+        // Generamos el pasto trasero a lo largo de toda la colina (300 briznas)
+        for (let i = 0; i < 300; i++) {
+            let x = (Math.random() - 0.5) * 3000; 
+            
+            // Ecuación matemática exacta de la Curva Bézier Quadrática para anclar el pasto a la tierra
+            let t = (x + 1500) / 3000; 
+            let curveY = (baseY + 200)*Math.pow(1-t, 2) + 2*(baseY - 200)*(1-t)*t + (baseY + 200)*Math.pow(t, 2);
+            
+            let y = curveY + Math.random() * 150; 
+            let perspectiva = 1 + (y - curveY) * 0.015; 
+            
+            let altura = (8 + Math.random() * 12) * perspectiva;
+            let grosor = (1.5 + Math.random() * 2) * perspectiva;
+            let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
+            let inclinacionIni = Math.random() * 16 - 8; 
+
+            let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
+            
+            bladesHtml += `<g transform="translate(${x}, ${y})">
+                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
+                     </g>`;
+        }
+        this.domGround.innerHTML = html + bladesHtml;
+
+        // GENERAR PASTO FONTAL (Tapa exclusivamente la base de la maceta)
+        let htmlFrente = '';
+        for (let i = 0; i < 40; i++) {
+            // Concentrado alrededor de la maceta
+            let x = (Math.random() - 0.5) * 160; 
+            
+            // REGLA ABSOLUTA: El pasto frontal NACE en baseY o más abajo. Nunca encima de la maceta.
+            let y = baseY + (Math.random() * 25); 
+            
+            let perspectiva = 1.8; // Muy grande por estar frente a la cámara
+            let altura = (10 + Math.random() * 12) * perspectiva;
+            let grosor = (2 + Math.random() * 1.5) * perspectiva;
+            let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
+            let inclinacionIni = Math.random() * 20 - 10; 
+
+            let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
+            
+            htmlFrente += `<g transform="translate(${x}, ${y})">
+                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
+                     </g>`;
+        }
+        this.domPastoFrente.innerHTML = htmlFrente;
+
+        this.blades = [
+            ...this.domGround.querySelectorAll('.blade'),
+            ...this.domPastoFrente.querySelectorAll('.blade')
+        ];
+    }
+
+    animarPasto(tiempo, viento) {
+        if (!this.blades) return;
+        const fuerza = viento * 45; 
+        
+        this.blades.forEach((blade) => {
+            const x = parseFloat(blade.getAttribute('data-x'));
+            const tilt = parseFloat(blade.getAttribute('data-tilt'));
+            
+            const fase = x * 0.015; 
+            const ruido = Math.sin(tiempo * 3.5 + fase);
+            const oscilacion = tilt + (viento * 20) + (ruido * fuerza * 0.6);
+            
+            blade.setAttribute('transform', `rotate(${oscilacion})`);
+        });
     }
 
     construirCielo() {

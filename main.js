@@ -25,19 +25,17 @@ let isAutoGrowing = false;
 let zenPausa = false;
 let isDying = false; 
 let deathFrameId = null;
+let muerteProgramada = false; // Control de ciclo seguro
 
 let wakeLock = null; 
 let idleTimeout = null;
 let showLeaves = true;
 let showFlowers = true;
-let audioIniciado = false;
-let muerteProgramada = false; // Bandera para el ciclo Zen
 
 const statsDisplay = document.getElementById('stats');
 const btnZenMain = document.getElementById('btn-zen-main');
 const dashboard = document.getElementById('dashboard');
 const btnAuto = document.getElementById('btn-auto');
-const btnMutar = document.getElementById('btn-mutar');
 
 const ESTADO_CICLICO = {}; 
 
@@ -57,7 +55,6 @@ function cargarAjustes() {
     try {
         const state = JSON.parse(saved);
         for(let id in state.ui) actualizarUI(id, state.ui[id], false); 
-        
         if (state.toggles) {
             showLeaves = state.toggles.showLeaves !== undefined ? state.toggles.showLeaves : true;
             showFlowers = state.toggles.showFlowers !== undefined ? state.toggles.showFlowers : true;
@@ -124,7 +121,7 @@ function construirInterfaz() {
     
     const inputSemilla = document.getElementById('input-semilla');
     if(inputSemilla) {
-        inputSemilla.addEventListener('change', () => {
+        inputSemilla.addEventListener('change', () => { 
             if(arbolBase && !isDying) iniciarMuerte(inicializarArbol);
         });
     }
@@ -180,10 +177,9 @@ const updatePot = () => {
     }
 };
 
-// --- FUNCIÓN CENTRAL DE REGENERACIÓN (LLAMADA POR EL MODO ZEN Y EL BOTÓN MUTAR) ---
+// --- FUNCIÓN CENTRAL DE REGENERACIÓN SEGURA ---
 function ejecutarMutacion() {
     if (isDying) return;
-    
     iniciarMuerte(() => {
         const fMaceta = DICCIONARIO_ENTORNO.macetas[Math.floor(Math.random() * DICCIONARIO_ENTORNO.macetas.length)].id;
         const cMaceta = DICCIONARIO_ENTORNO.esmaltes[Math.floor(Math.random() * DICCIONARIO_ENTORNO.esmaltes.length)].id;
@@ -194,7 +190,6 @@ function ejecutarMutacion() {
         actualizarUI('p-maceta-color', cMaceta, false);
         actualizarUI('p-forma', fHoja, false);
         actualizarUI('p-flora', tFlora, false);
-        
         actualizarUI('p-viento', Math.floor(rnd(10, 80)), false);
         actualizarUI('p-edadRam', (rnd(1.5, 4.5)).toFixed(1), false);
         actualizarUI('p-length', Math.floor(rnd(10, 25)), false);
@@ -209,9 +204,7 @@ function ejecutarMutacion() {
         let inputSemilla = document.getElementById('input-semilla');
         if(inputSemilla) inputSemilla.value = Math.random().toString(36).substring(2, 8).toUpperCase();
         
-        updatePot();
-        guardarAjustes();
-        inicializarArbol(); // Reinicia el ciclo visual
+        updatePot(); guardarAjustes(); inicializarArbol();
     });
 }
 
@@ -224,14 +217,9 @@ function iniciarMuerte(callbackRenacer) {
     isDying = true;
     zenPausa = true;
 
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-    }
+    if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
 
-    let hojasF = []; 
-    let ramasPorGen = {}; 
-    let maxGenActual = 0;
+    let hojasF = []; let ramasPorGen = {}; let maxGenActual = 0;
 
     function clasificar(rama) {
         maxGenActual = Math.max(maxGenActual, rama.gen);
@@ -268,28 +256,14 @@ function iniciarMuerte(callbackRenacer) {
             }
         });
 
-        let obj = {
-            dom: rama.g, path: rama.path, joints: [rama.jointBase, rama.jointTip],
-            x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -0.5,
-            cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2,
-            colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false,
-            isBroken: false, 
-            isEarlySplintered: false, 
-            ramaRef: rama 
-        };
-
-        ramasPorGen[rama.gen].push(obj);
-        rama.hijos.forEach(clasificar);
+        let obj = { dom: rama.g, path: rama.path, joints: [rama.jointBase, rama.jointTip], x: 0, y: 0, rot: 0, vx: (Math.random() - 0.5) * 2, vy: Math.random() * -0.5, cx: rama.startX + (rama.endXAct - rama.startX)/2, cy: rama.startY + (rama.endYAct - rama.startY)/2, colorOriginal: rama.currentFill, fallTime: 0, tocandoSuelo: false, isBroken: false, isEarlySplintered: false, ramaRef: rama };
+        ramasPorGen[rama.gen].push(obj); rama.hijos.forEach(clasificar);
     }
 
-    clasificar(arbolBase);
-    arbolBase = null; 
+    clasificar(arbolBase); arbolBase = null; 
 
     function shuffle(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
+        for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; }
     }
 
     shuffle(hojasF);
@@ -300,25 +274,19 @@ function iniciarMuerte(callbackRenacer) {
         else h.fallTime = 1600 + Math.random() * 300;                 
     });
 
-    let ramasFlat = [];
-    let tronco = [];
-    let fallTimeCursor = 2500; 
-    let primerQuiebreTime = 0; 
+    let ramasFlat = []; let tronco = []; let fallTimeCursor = 2500; let primerQuiebreTime = 0; 
     
     for (let g = maxGenActual; g >= 0; g--) {
         if (ramasPorGen[g]) {
-            if (g <= 2) {
-                tronco.push(...ramasPorGen[g]); 
-            } else {
+            if (g <= 2) { tronco.push(...ramasPorGen[g]); } 
+            else {
                 ramasPorGen[g].forEach(r => {
                     r.fallTime = fallTimeCursor + Math.random() * 150;
                     r.breakTime = r.fallTime - 400; 
                     ramasFlat.push(r);
                 });
-                
                 if (primerQuiebreTime === 0) primerQuiebreTime = fallTimeCursor;
                 fallTimeCursor += 500; 
-                
                 if (audioMotor.sfxEnabled) {
                     let audioTime = fallTimeCursor - 400; 
                     setTimeout(() => audioMotor.playRamaSeca(audioMotor.audioCtx.currentTime), Math.max(0, audioTime));
@@ -328,52 +296,31 @@ function iniciarMuerte(callbackRenacer) {
     }
     
     if (primerQuiebreTime === 0) primerQuiebreTime = 2500; 
-    let trunkTime = fallTimeCursor + 400;
-    let todasLasRamas = [...ramasFlat, ...tronco]; 
+    let trunkTime = fallTimeCursor + 400; let todasLasRamas = [...ramasFlat, ...tronco]; 
     let startTime = performance.now();
     let basePotY = entornoMotor.macetaActual ? entornoMotor.macetaActual.baseY : 35;
     let groundY = basePotY + 10; 
 
     function loopMuerte(now) {
-        let elapsed = now - startTime;
-        let completado = true;
+        let elapsed = now - startTime; let completado = true;
 
         todasLasRamas.forEach(r => {
             if (elapsed > 50 && !r.isEarlySplintered && r.ramaRef.gen < maxGenActual) {
-                r.isEarlySplintered = true;
-                let ref = r.ramaRef;
-                let dx = ref.endXAct - ref.startX;
-                let dy = ref.endYAct - ref.startY;
-                let len = Math.hypot(dx, dy);
-                
+                r.isEarlySplintered = true; let ref = r.ramaRef;
+                let dx = ref.endXAct - ref.startX; let dy = ref.endYAct - ref.startY; let len = Math.hypot(dx, dy);
                 if (len > 0) {
                     let nxDir = dx / len; let nyDir = dy / len;
                     let currentD = r.path.getAttribute("d");
                     let regex = /M\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+L\s+([^ ]+)\s+([^ ]+)\s+Q\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+Z/i;
                     let m = currentD.match(regex);
-                    
                     if (m) {
-                        let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]);
-                        let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]);
-                        let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]);
-                        let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]);
-                        let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]);
-                        let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
-                        
-                        let vtipX = px2 - px1; let vtipY = py2 - py1;
-                        let rFin = ref.grosorPuntaAct / 2;
-                        let spikeLen = rFin * 1.5; 
-                        
-                        let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                        let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                        let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
-                        let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
-                        let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                        let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                        
+                        let bx1 = parseFloat(m[1]), by1 = parseFloat(m[2]); let cx1 = parseFloat(m[3]), cy1 = parseFloat(m[4]); let px1 = parseFloat(m[5]), py1 = parseFloat(m[6]); let px2 = parseFloat(m[7]), py2 = parseFloat(m[8]); let cx2 = parseFloat(m[9]), cy2 = parseFloat(m[10]); let bx2 = parseFloat(m[11]), by2 = parseFloat(m[12]);
+                        let vtipX = px2 - px1; let vtipY = py2 - py1; let rFin = ref.grosorPuntaAct / 2; let spikeLen = rFin * 1.5; 
+                        let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                        let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4); let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                        let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
                         let newD = `M ${bx1} ${by1} Q ${cx1} ${cy1} ${px1} ${py1} L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y} L ${px2} ${py2} Q ${cx2} ${cy2} ${bx2} ${by2} Z`;
-                        r.path.setAttribute("d", newD);
-                        r.joints[1].style.display = 'none'; 
+                        r.path.setAttribute("d", newD); r.joints[1].style.display = 'none'; 
                     }
                 }
             }
@@ -384,15 +331,10 @@ function iniciarMuerte(callbackRenacer) {
                 completado = false;
                 if (elapsed > p.fallTime) {
                     let age = elapsed - p.fallTime; 
-                    p.vy += 0.03; 
-                    p.vx += Math.sin(now * 0.003 + p.y) * 0.05; 
-                    p.vx *= 0.92; p.vy *= 0.95; 
-                    p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
-                    let op = p.startOpacity;
-                    if (age > 700) op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
+                    p.vy += 0.03; p.vx += Math.sin(now * 0.003 + p.y) * 0.05; p.vx *= 0.92; p.vy *= 0.95; p.x += p.vx; p.y += p.vy; p.rot += p.vx * 2;
+                    let op = p.startOpacity; if (age > 700) op = Math.max(0, p.startOpacity * (1 - (age - 700) / 600));
                     p.dom.setAttribute('transform', `translate(${p.x}, ${p.y}) rotate(${p.rot}) scale(${p.scale})`);
-                    p.dom.setAttribute('opacity', op);
-                    if (op <= 0) p.dom.style.display = 'none'; 
+                    p.dom.setAttribute('opacity', op); if (op <= 0) p.dom.style.display = 'none'; 
                 }
             }
         });
@@ -401,40 +343,27 @@ function iniciarMuerte(callbackRenacer) {
             if (r.dom.style.display !== 'none') {
                 completado = false;
                 if (elapsed > r.breakTime && !r.isBroken) {
-                    r.isBroken = true;
-                    let ref = r.ramaRef;
-                    let dx = ref.endXAct - ref.startX; let dy = ref.endYAct - ref.startY;
-                    let len = Math.hypot(dx, dy);
+                    r.isBroken = true; let ref = r.ramaRef;
+                    let dx = ref.endXAct - ref.startX; let dy = ref.endYAct - ref.startY; let len = Math.hypot(dx, dy);
                     if (len > 0) {
-                        let nx = -dy / len; let ny = dx / len;
-                        let nxDir = dx / len; let nyDir = dy / len;
-                        let rBase = (ref.grosorBaseAct / 2) * 0.95; 
-                        let rFin = ref.grosorPuntaAct / 2;
-                        let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase;
-                        let bx2 = ref.startX - nx * rBase; let by2 = ref.startY - ny * rBase;
-                        let px1 = ref.endXAct + nx * rFin; let py1 = ref.endYAct + ny * rFin;
-                        let px2 = ref.endXAct - nx * rFin; let py2 = ref.endYAct - ny * rFin;
+                        let nx = -dy / len; let ny = dx / len; let nxDir = dx / len; let nyDir = dy / len;
+                        let rBase = (ref.grosorBaseAct / 2) * 0.95; let rFin = ref.grosorPuntaAct / 2;
+                        let bx1 = ref.startX + nx * rBase; let by1 = ref.startY + ny * rBase; let bx2 = ref.startX - nx * rBase; let by2 = ref.startY - ny * rBase;
+                        let px1 = ref.endXAct + nx * rFin; let py1 = ref.endYAct + ny * rFin; let px2 = ref.endXAct - nx * rFin; let py2 = ref.endYAct - ny * rFin;
                         let vtipX = px2 - px1; let vtipY = py2 - py1;
-                        
-                        let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*1.2;
-                        let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*1.2;
-                        let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*1.2;
-                        let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*1.2;
+                        let j1x = ref.startX + dx*0.3 + nx*(Math.random()-0.5)*rBase*1.2; let j1y = ref.startY + dy*0.3 + ny*(Math.random()-0.5)*rBase*1.2;
+                        let j2x = ref.startX + dx*0.7 + nx*(Math.random()-0.5)*rBase*1.2; let j2y = ref.startY + dy*0.7 + ny*(Math.random()-0.5)*rBase*1.2;
 
                         let sharpPath = `M ${bx1} ${by1} L ${j1x} ${j1y} L ${j2x} ${j2y} L ${px1} ${py1}`;
                         if (ref.gen < maxGenActual) {
                             let spikeLen = rFin * 1.5;
-                            let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                            let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
-                            let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4);
-                            let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
-                            let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5);
-                            let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s1x = px1 + vtipX*0.2 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s1y = py1 + vtipY*0.2 + nyDir*spikeLen*(0.8+Math.random()*0.5);
+                            let s2x = px1 + vtipX*0.5 + nxDir*spikeLen*(0.2+Math.random()*0.4); let s2y = py1 + vtipY*0.5 + nyDir*spikeLen*(0.2+Math.random()*0.4);
+                            let s3x = px1 + vtipX*0.8 + nxDir*spikeLen*(0.8+Math.random()*0.5); let s3y = py1 + vtipY*0.8 + nyDir*spikeLen*(0.8+Math.random()*0.5);
                             sharpPath += ` L ${s1x} ${s1y} L ${s2x} ${s2y} L ${s3x} ${s3y}`;
                         } else { sharpPath += ` L ${ref.endXAct} ${ref.endYAct}`; }
                         sharpPath += ` L ${px2} ${py2} L ${j1x - nx*rBase} ${j1y - ny*rBase} L ${bx2} ${by2} Z`;
-                        r.path.setAttribute("d", sharpPath);
-                        r.joints.forEach(j => j.style.display = 'none');
+                        r.path.setAttribute("d", sharpPath); r.joints.forEach(j => j.style.display = 'none');
                     }
                 }
                 
@@ -444,16 +373,13 @@ function iniciarMuerte(callbackRenacer) {
                         r.vy += 0.6; r.x += r.vx; r.y += r.vy; r.rot += r.vx * 1.5;
                         if (r.y + r.cy > groundY) {
                             r.y = groundY - r.cy; r.vy *= -0.3; r.vx *= 0.5;
-                            let targetRot = (r.rot > 0) ? 90 : -90;
-                            r.rot += (targetRot - r.rot) * 0.2;
+                            let targetRot = (r.rot > 0) ? 90 : -90; r.rot += (targetRot - r.rot) * 0.2;
                             if (Math.abs(r.vy) < 1.0) r.tocandoSuelo = true;
                         }
                     }
-                    let op = 1;
-                    if (age > 800) op = Math.max(0, 1 - (age - 800) / 400);
+                    let op = 1; if (age > 800) op = Math.max(0, 1 - (age - 800) / 400);
                     r.dom.setAttribute('transform', `translate(${r.x}, ${r.y}) rotate(${r.rot}, ${r.cx}, ${r.cy})`);
-                    r.dom.setAttribute('opacity', op);
-                    if (op <= 0) r.dom.style.display = 'none';
+                    r.dom.setAttribute('opacity', op); if (op <= 0) r.dom.style.display = 'none';
                 }
             }
         });
@@ -462,15 +388,11 @@ function iniciarMuerte(callbackRenacer) {
             let pProgreso = Math.min(1, (elapsed - trunkTime) / 1000); 
             tronco.forEach(r => {
                 if (r.dom.style.display !== 'none') {
-                    completado = false;
-                    let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                    completado = false; let match = r.colorOriginal.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
                     if (match) {
-                        let rFill = Math.max(15, match[1] * (1 - pProgreso));
-                        let gFill = Math.max(15, match[2] * (1 - pProgreso));
-                        let bFill = Math.max(15, match[3] * (1 - pProgreso));
+                        let rFill = Math.max(15, match[1] * (1 - pProgreso)); let gFill = Math.max(15, match[2] * (1 - pProgreso)); let bFill = Math.max(15, match[3] * (1 - pProgreso));
                         let newColor = `rgb(${rFill},${gFill},${bFill})`; 
-                        r.path.setAttribute('fill', newColor);
-                        r.joints[0].setAttribute('fill', newColor); 
+                        r.path.setAttribute('fill', newColor); r.joints[0].setAttribute('fill', newColor); 
                     }
                 }
             });
@@ -486,8 +408,7 @@ function iniciarMuerte(callbackRenacer) {
         if (!completado) {
             deathFrameId = requestAnimationFrame(loopMuerte);
         } else {
-            isDying = false;
-            if (callbackRenacer) callbackRenacer(); 
+            isDying = false; if (callbackRenacer) callbackRenacer(); 
         }
     }
     deathFrameId = requestAnimationFrame(loopMuerte);
@@ -503,21 +424,12 @@ async function solicitarWakeLock() {
     } catch (err) { }
 }
 
-function liberarWakeLock() {
-    if (wakeLock !== null) {
-        wakeLock.release();
-        wakeLock = null;
-    }
-}
+function liberarWakeLock() { if (wakeLock !== null) { wakeLock.release(); wakeLock = null; } }
+document.addEventListener('visibilitychange', async () => { if (wakeLock === null && document.visibilityState === 'visible' && isZenMode) solicitarWakeLock(); });
 
-document.addEventListener('visibilitychange', async () => {
-    if (wakeLock === null && document.visibilityState === 'visible' && isZenMode) {
-        solicitarWakeLock();
-    }
-});
-
+// EL CÓDIGO CRÍTICO PARA EL AUDIO: Resumir incondicionalmente el contexto al interactuar
 function arrancarAudioSilencioso() {
-    if(audioMotor.audioCtx.state === 'suspended') {
+    if (audioMotor && audioMotor.audioCtx && audioMotor.audioCtx.state === 'suspended') {
         audioMotor.audioCtx.resume();
     }
 }
@@ -525,9 +437,7 @@ function arrancarAudioSilencioso() {
 function resetTimerIdle() {
     document.body.classList.remove('zen-idle');
     clearTimeout(idleTimeout);
-    idleTimeout = setTimeout(() => { 
-        if (isZenMode) document.body.classList.add('zen-idle'); 
-    }, 5000);
+    idleTimeout = setTimeout(() => { if (isZenMode) document.body.classList.add('zen-idle'); }, 5000);
 }
 
 window.addEventListener('mousemove', (e) => { if (!e.isTrusted) return; arrancarAudioSilencioso(); resetTimerIdle(); });
@@ -552,8 +462,7 @@ if(btnStep) {
             if(btnAuto) { btnAuto.classList.remove('active-toggle'); btnAuto.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF'; }
         }
         if(arbolBase && iteracionGlobal <= 18) {
-            arbolBase.crecer(1.0, getParams());
-            iteracionGlobal += 1.0;
+            arbolBase.crecer(1.0, getParams()); iteracionGlobal += 1.0;
             statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
             arbolBase.animarYRenderizar(0, tiempoViento, getParams().viento, showLeaves, showFlowers);
         }
@@ -562,13 +471,8 @@ if(btnStep) {
 
 if(btnAuto) btnAuto.addEventListener('click', (e) => {
     isAutoGrowing = !isAutoGrowing;
-    if(isAutoGrowing) {
-        e.currentTarget.classList.add('active-toggle');
-        e.currentTarget.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
-    } else {
-        e.currentTarget.classList.remove('active-toggle');
-        e.currentTarget.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF';
-    }
+    if(isAutoGrowing) { e.currentTarget.classList.add('active-toggle'); e.currentTarget.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON'; } 
+    else { e.currentTarget.classList.remove('active-toggle'); e.currentTarget.innerHTML = '<span class="material-symbols-rounded">play_arrow</span> AUTO: OFF'; }
 });
 
 const btnHojas = document.getElementById('btn-hojas');
@@ -614,11 +518,8 @@ if (btnMusic) btnMusic.addEventListener('click', toggleMusic); if (btnMusicQuick
 const btnSfx = document.getElementById('btn-sfx'); const btnSfxQuick = document.getElementById('btn-sfx-quick');
 if (btnSfx) btnSfx.addEventListener('click', toggleSfx); if (btnSfxQuick) btnSfxQuick.addEventListener('click', toggleSfx);
 
-if(btnMutar) btnMutar.addEventListener('click', (e) => {
-    // Si viene de un script automático en modo Zen, evitamos que el clic humano interfiera
-    if (e && !e.isTrusted && isDying) return; 
-    ejecutarMutacion();
-});
+const btnMutarMenu = document.getElementById('btn-mutar');
+if(btnMutarMenu) btnMutarMenu.addEventListener('click', () => { ejecutarMutacion(); });
 
 if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
     if (!e.isTrusted) return; 
@@ -629,7 +530,7 @@ if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
         document.body.classList.add('zen-active');
         btnZenMain.classList.add('active');
         zenPausa = false;
-        muerteProgramada = false; // Reset al entrar a Zen
+        muerteProgramada = false; 
         
         isAutoGrowing = true;
         if(btnAuto) {
@@ -637,18 +538,12 @@ if(btnZenMain) btnZenMain.addEventListener('click', (e) => {
             btnAuto.innerHTML = '<span class="material-symbols-rounded">pause</span> AUTO: ON';
         }
         
-        // Si entra a Zen y el árbol ya es viejo, muta de inmediato
-        if (iteracionGlobal >= 18) {
-             setTimeout(() => { if (!isDying) ejecutarMutacion(); }, 500);
-        }
+        if (iteracionGlobal >= 18) { setTimeout(() => { if (!isDying) ejecutarMutacion(); }, 500); }
         
-        solicitarWakeLock();
-        resetTimerIdle(); 
+        solicitarWakeLock(); resetTimerIdle(); 
     } else {
-        document.body.classList.remove('zen-active');
-        document.body.classList.remove('zen-idle');
-        btnZenMain.classList.remove('active');
-        liberarWakeLock();
+        document.body.classList.remove('zen-active'); document.body.classList.remove('zen-idle');
+        btnZenMain.classList.remove('active'); liberarWakeLock();
     }
 });
 
@@ -665,20 +560,13 @@ window.aplicarPreset = function(tipo) {
     if(isDying) return;
     iniciarMuerte(() => {
         const p = PRESETS_BOTANICOS[tipo];
-        actualizarUI('p-maceta-forma', p.mForma, false);
-        actualizarUI('p-maceta-color', p.mColor, false);
-        actualizarUI('p-forma', p.forma, false);
-        actualizarUI('p-flora', p.flora, false);
-        actualizarUI('p-viento', p.viento, false);
-        actualizarUI('p-edadRam', p.edadRam, false);
-        actualizarUI('p-length', p.length, false);
-        actualizarUI('p-lenVar', p.lenVar, false);
-        actualizarUI('p-angle', p.angle, false);
-        actualizarUI('p-branch', p.branch, false);
-        actualizarUI('p-acc', p.acc, false);
-        actualizarUI('p-gen', p.gen, false);
-        actualizarUI('p-hojas', p.hojas, false);
-        actualizarUI('p-flor', p.flor, false);
+        actualizarUI('p-maceta-forma', p.mForma, false); actualizarUI('p-maceta-color', p.mColor, false);
+        actualizarUI('p-forma', p.forma, false); actualizarUI('p-flora', p.flora, false);
+        actualizarUI('p-viento', p.viento, false); actualizarUI('p-edadRam', p.edadRam, false);
+        actualizarUI('p-length', p.length, false); actualizarUI('p-lenVar', p.lenVar, false);
+        actualizarUI('p-angle', p.angle, false); actualizarUI('p-branch', p.branch, false);
+        actualizarUI('p-acc', p.acc, false); actualizarUI('p-gen', p.gen, false);
+        actualizarUI('p-hojas', p.hojas, false); actualizarUI('p-flor', p.flor, false);
         
         let inputSemilla = document.getElementById('input-semilla');
         if(inputSemilla) inputSemilla.value = tipo.toUpperCase() + "-" + Math.floor(Math.random()*99);
@@ -698,13 +586,13 @@ function bucleAnimacion() {
         iteracionGlobal += deltaZen;
         statsDisplay.textContent = `NODOS: ${arbolBase.contarNodos()} | AÑOS: ${iteracionGlobal.toFixed(1)}`;
 
-        // LA CORRECCIÓN DEL CICLO ZEN
+        // LA CORRECCIÓN DEL CICLO ZEN: Solo se evalúa si NO está programada la muerte
         if (iteracionGlobal >= 18 && !muerteProgramada) {
             muerteProgramada = true; 
             zenPausa = true;
             
             if (isZenMode) {
-                // Ejecutamos la mutación en lugar de simular un clic, asegurando el estado
+                // Ejecutamos la mutación programática, garantizando que ocurra solo una vez
                 setTimeout(() => { if (!isDying && isZenMode) ejecutarMutacion(); }, 3000); 
             } else {
                 isAutoGrowing = false;
@@ -732,15 +620,12 @@ function inicializarArbol() {
         setSeed(textoSemilla);
         if (audioMotor && typeof audioMotor.reseedMusicEngine === 'function') audioMotor.reseedMusicEngine(textoSemilla);
         
-        const url = new URL(window.location);
-        url.searchParams.set('seed', textoSemilla);
-        window.history.replaceState({}, '', url);
+        const url = new URL(window.location); url.searchParams.set('seed', textoSemilla); window.history.replaceState({}, '', url);
     }
     
     arbolBase = new Rama(0, 0, 0, -90, null, getParams(), domContext);
     iteracionGlobal = 0; zenPausa = false; muerteProgramada = false; isDying = false;
     if (statsDisplay) statsDisplay.textContent = `NODOS: 1 | AÑOS: 0.0`;
-    
     bucleAnimacion();
 }
 
@@ -750,18 +635,14 @@ window.addEventListener('DOMContentLoaded', () => {
     const semillaURL = urlParams.get('seed');
     let inputSemilla = document.getElementById('input-semilla');
     
-    if (semillaURL && inputSemilla) {
-        inputSemilla.value = semillaURL.toUpperCase();
-    } else {
-        cargarAjustes(); 
-    }
+    if (semillaURL && inputSemilla) inputSemilla.value = semillaURL.toUpperCase();
+    else cargarAjustes(); 
 
     let btnCopiar = document.getElementById('btn-copiar-semilla');
     if (btnCopiar) {
         btnCopiar.addEventListener('click', () => {
             navigator.clipboard.writeText(window.location.href).then(() => {
-                btnCopiar.innerHTML = '<span class="material-symbols-rounded">check</span>';
-                setTimeout(() => btnCopiar.innerHTML = '<span class="material-symbols-rounded">content_copy</span>', 2000);
+                btnCopiar.innerHTML = '<span class="material-symbols-rounded">check</span>'; setTimeout(() => btnCopiar.innerHTML = '<span class="material-symbols-rounded">content_copy</span>', 2000);
             });
         });
     }
@@ -789,8 +670,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then(registration => console.log('PWA Lista'))
-            .catch(err => console.log('PWA Error', err));
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('PWA Error', err));
     });
 }

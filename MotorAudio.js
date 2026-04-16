@@ -16,12 +16,13 @@ export class MotorAudio {
         // Timers y Limitadores
         this.ambientTimeout = null;
         this.zenTimeoutId = null;
-        this.lastPopTime = 0; // Limitador anti-saturación para las flores
+        this.lastPopTime = 0; 
+        
+        // NUEVO: Limitador de CPU para el viento
+        this.lastWindUpdate = 0; 
 
-        // Array para las campanas de viento del entorno
         this.chimeNotes = [1200, 1500, 1800, 2100, 2600, 3200];
         
-        // --- Variables del Sintetizador Musical Zen ---
         this.musicMaster = null;
         this.musicDry = null;
         this.musicReverbSend = null;
@@ -38,17 +39,12 @@ export class MotorAudio {
         this.lastPhraseEndedAt = 0;
     }
 
-    // ==========================================
-    // INICIALIZACIÓN PEREZOSA (Evita bloqueos del navegador)
-    // ==========================================
     initCtx() {
         if (!this.audioCtx) {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
             this.masterGainSFX = this.audioCtx.createGain();
             this.masterGainSFX.connect(this.audioCtx.destination);
             this.masterGainSFX.gain.value = 0.5;
-
             this.crearRuidoBlanco(); 
             this.initZenMusicEngine(); 
         }
@@ -74,14 +70,9 @@ export class MotorAudio {
         return noiseSource;
     }
 
-    // ==========================================
-    // SECCIÓN 1: ECOSISTEMA AMBIENTAL (Viento, Grillos, Pájaros)
-    // ==========================================
-
     initCapasContinuas() {
         if (this.windGainNode || !this.audioCtx) return;
         try {
-            // Capa 1: Viento base
             const sourceViento = this.crearFuenteRuido();
             this.filtroViento = this.audioCtx.createBiquadFilter();
             this.filtroViento.type = 'lowpass';
@@ -90,7 +81,6 @@ export class MotorAudio {
             this.windGainNode.gain.value = 0;
             sourceViento.connect(this.filtroViento).connect(this.windGainNode).connect(this.masterGainSFX);
 
-            // Capa 2: Hojas crujiendo (frecuencia alta)
             const sourceHojas = this.crearFuenteRuido();
             const filtroHojas = this.audioCtx.createBiquadFilter();
             filtroHojas.type = 'bandpass';
@@ -100,7 +90,6 @@ export class MotorAudio {
             this.leavesGainNode.gain.value = 0;
             sourceHojas.connect(filtroHojas).connect(this.leavesGainNode).connect(this.masterGainSFX);
 
-            // Capa 3: Grillos nocturnos
             const grilloOsc = this.audioCtx.createOscillator();
             grilloOsc.type = 'sawtooth';
             grilloOsc.frequency.value = 4500; 
@@ -139,9 +128,15 @@ export class MotorAudio {
 
     actualizarViento(tiempoViento, intensidadCien) {
         if (!this.sfxEnabled || !this.windGainNode || !this.audioCtx) return;
+        
+        // OPTIMIZACIÓN 1: Limitador de CPU. 
+        // En lugar de calcular esto 60 veces por segundo, lo hacemos solo 10 veces.
+        const now = performance.now();
+        if (now - this.lastWindUpdate < 100) return; 
+        this.lastWindUpdate = now;
+
         try {
             let windIntensity = Math.min(100, Math.max(0, intensidadCien)) / 100;
-            
             let volViento = windIntensity * (0.05 + 0.1 * Math.abs(Math.sin(tiempoViento * 1.2)));
             this.windGainNode.gain.setTargetAtTime(volViento, this.audioCtx.currentTime, 0.1);
             
@@ -157,27 +152,24 @@ export class MotorAudio {
         } catch(e) {}
     }
 
-    // --- EVENTOS DE SONIDO ALEATORIOS ---
-
     ecosistemaAmbiental = () => {
         if (!this.sfxEnabled || !this.audioCtx) return;
         const dado = Math.random();
         const tiempo = this.audioCtx.currentTime;
         
-        if (dado > 0.90) {
-            this.playCarpintero(tiempo);
-        } else if (dado > 0.75) {
+        if (dado > 0.90) this.playCarpintero(tiempo);
+        else if (dado > 0.75) {
             this.playCampanaViento(tiempo);
             if(Math.random() > 0.5) this.playCampanaViento(tiempo + 0.2); 
-        } else if (dado > 0.60) {
-            this.playAve(tiempo);
-        } else if (dado > 0.45) {
-            this.playPezSplash(tiempo);
-        } else if (dado > 0.30) {
-            this.playRamaSeca(tiempo);
-        }
+        } else if (dado > 0.60) this.playAve(tiempo);
+        else if (dado > 0.45) this.playPezSplash(tiempo);
+        else if (dado > 0.30) this.playRamaSeca(tiempo);
+        
         this.ambientTimeout = setTimeout(this.ecosistemaAmbiental, 3000 + Math.random() * 7000);
     }
+
+    // A partir de aquí, todas las funciones de sonido efímero incluyen .onended = disconnect
+    // para destruir los nodos y liberar memoria RAM al instante.
 
     playCarpintero(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
@@ -185,8 +177,7 @@ export class MotorAudio {
         for(let i=0; i<golpes; i++) {
             const noise = this.crearFuenteRuido();
             const filtro = this.audioCtx.createBiquadFilter();
-            filtro.type = 'bandpass';
-            filtro.frequency.value = 1200; 
+            filtro.type = 'bandpass'; filtro.frequency.value = 1200; 
             const gain = this.audioCtx.createGain();
             noise.connect(filtro).connect(gain).connect(this.masterGainSFX);
             const t = tiempoActual + (i * 0.06); 
@@ -194,6 +185,8 @@ export class MotorAudio {
             gain.gain.linearRampToValueAtTime(0.6, t + 0.005); 
             gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); 
             noise.stop(t + 0.05);
+            // OPTIMIZACIÓN 2: Recolector de basura agresivo
+            noise.onended = () => { try { noise.disconnect(); filtro.disconnect(); gain.disconnect(); } catch(e){} };
         }
     }
 
@@ -207,42 +200,27 @@ export class MotorAudio {
         gain.gain.setValueAtTime(0, tiempoActual);
         gain.gain.linearRampToValueAtTime(0.2, tiempoActual + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 4.0); 
-        osc.start(tiempoActual);
-        osc.stop(tiempoActual + 4.5);
+        osc.start(tiempoActual); osc.stop(tiempoActual + 4.5);
+        osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
     }
 
     playPezSplash(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        
-        // Capa 1: El "Bloop" (Resonancia del agua)
         const osc = this.audioCtx.createOscillator();
         const gainBloop = this.audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, tiempoActual);
-        osc.frequency.exponentialRampToValueAtTime(150, tiempoActual + 0.15); // Cae rápido
-        
-        gainBloop.gain.setValueAtTime(0, tiempoActual);
-        gainBloop.gain.linearRampToValueAtTime(0.3, tiempoActual + 0.02);
-        gainBloop.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.25);
-        
+        osc.type = 'sine'; osc.frequency.setValueAtTime(400, tiempoActual); osc.frequency.exponentialRampToValueAtTime(150, tiempoActual + 0.15); 
+        gainBloop.gain.setValueAtTime(0, tiempoActual); gainBloop.gain.linearRampToValueAtTime(0.3, tiempoActual + 0.02); gainBloop.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.25);
         osc.connect(gainBloop).connect(this.masterGainSFX);
 
-        // Capa 2: El "Swish" (Salpicadura sutil)
         const noise = this.crearFuenteRuido();
         const filtroNoise = this.audioCtx.createBiquadFilter();
-        filtroNoise.type = 'bandpass';
-        filtroNoise.frequency.value = 1200; // Frecuencia líquida aguda
+        filtroNoise.type = 'bandpass'; filtroNoise.frequency.value = 1200; 
         const gainNoise = this.audioCtx.createGain();
-        
-        gainNoise.gain.setValueAtTime(0, tiempoActual);
-        gainNoise.gain.linearRampToValueAtTime(0.1, tiempoActual + 0.02); // Volumen bajo para que no sature
-        gainNoise.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.2);
-        
+        gainNoise.gain.setValueAtTime(0, tiempoActual); gainNoise.gain.linearRampToValueAtTime(0.1, tiempoActual + 0.02); gainNoise.gain.exponentialRampToValueAtTime(0.001, tiempoActual + 0.2);
         noise.connect(filtroNoise).connect(gainNoise).connect(this.masterGainSFX);
 
-        osc.start(tiempoActual);
-        osc.stop(tiempoActual + 0.3);
-        noise.stop(tiempoActual + 0.25);
+        osc.start(tiempoActual); osc.stop(tiempoActual + 0.3); noise.stop(tiempoActual + 0.25);
+        osc.onended = () => { try { osc.disconnect(); gainBloop.disconnect(); noise.disconnect(); filtroNoise.disconnect(); gainNoise.disconnect(); } catch(e){} };
     }
 
     playAve(tiempoActual) {
@@ -261,8 +239,8 @@ export class MotorAudio {
             gain.gain.setValueAtTime(0, t);
             gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-            osc.start(t);
-            osc.stop(t + 0.15);
+            osc.start(t); osc.stop(t + 0.15);
+            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
             t += 0.1 + Math.random() * 0.1; 
         }
     }
@@ -273,30 +251,21 @@ export class MotorAudio {
             const osc = this.audioCtx.createOscillator();
             const gain = this.audioCtx.createGain();
             const filter = this.audioCtx.createBiquadFilter();
-
             osc.type = 'square';
             osc.frequency.setValueAtTime(150 + Math.random() * 200, time);
             osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
-
-            filter.type = 'bandpass';
-            filter.frequency.value = 1000 + Math.random() * 2000;
-            filter.Q.value = 2;
-
+            filter.type = 'bandpass'; filter.frequency.value = 1000 + Math.random() * 2000; filter.Q.value = 2;
             gain.gain.setValueAtTime(0, time);
             gain.gain.linearRampToValueAtTime(0.3, time + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-
             osc.connect(filter).connect(gain).connect(this.masterGainSFX);
-            osc.start(time);
-            osc.stop(time + 0.2);
+            osc.start(time); osc.stop(time + 0.2);
+            osc.onended = () => { try { osc.disconnect(); filter.disconnect(); gain.disconnect(); } catch(e){} };
         } catch(e){}
     }
 
     playPop() {
         if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state === 'suspended') return;
-        
-        // LÍMITE DE CADENCIA (Throttle): Previene la saturación de CPU y distorsión de volumen
-        // Si han pasado menos de 100ms desde el último Pop, ignoramos este.
         if (this.audioCtx.currentTime - this.lastPopTime < 0.1) return;
         this.lastPopTime = this.audioCtx.currentTime;
 
@@ -309,14 +278,11 @@ export class MotorAudio {
             const freq = 600 + Math.random() * 800; 
             osc.frequency.setValueAtTime(freq, time);
             osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.1);
-            
             gain.gain.setValueAtTime(0, time);
-            // Volumen base reducido (0.06) para que en conjunto con la música no sature
             gain.gain.linearRampToValueAtTime(0.06, time + 0.01); 
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15); 
-            
-            osc.start(time);
-            osc.stop(time + 0.15);
+            osc.start(time); osc.stop(time + 0.15);
+            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
         } catch (e) {}
     }
 
@@ -409,12 +375,8 @@ export class MotorAudio {
 
     _weightedNextDegree() {
         const candidates = [
-            { d: this.currentDegree, w: 0.38 },             
-            { d: this.currentDegree - 1, w: 0.22 },         
-            { d: this.currentDegree + 1, w: 0.22 },         
-            { d: this.currentDegree - 2, w: 0.08 },         
-            { d: this.currentDegree + 2, w: 0.08 },
-            { d: 0, w: 0.18 }                               
+            { d: this.currentDegree, w: 0.38 }, { d: this.currentDegree - 1, w: 0.22 }, { d: this.currentDegree + 1, w: 0.22 },         
+            { d: this.currentDegree - 2, w: 0.08 }, { d: this.currentDegree + 2, w: 0.08 }, { d: 0, w: 0.18 }                               
         ];
         const total = candidates.reduce((s, c) => s + c.w, 0);
         let roll = Math.random() * total;
@@ -469,6 +431,9 @@ export class MotorAudio {
 
             osc.start(time); lfo.start(time);
             osc.stop(time + duration + 0.1); lfo.stop(time + duration + 0.1);
+
+            // Destrucción profunda de sintetizador
+            osc.onended = () => { try { osc.disconnect(); filter.disconnect(); amp.disconnect(); lfo.disconnect(); lfoGain.disconnect(); } catch(e){} };
         } catch(e) {}
     }
 

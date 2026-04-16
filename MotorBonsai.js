@@ -215,7 +215,6 @@ export class Rama {
         this.ctx = ctx; 
         this.esAccesoria = false; 
         
-        // Vector Normal (Usado para anclar ramas al borde y no al centro)
         this.nxMid = 0; 
         this.nyMid = 0;
         this.nxFin = 0;
@@ -230,13 +229,9 @@ export class Rama {
         this.startX = startX; this.startY = startY;
         this.angulo = anguloInicial;
         
-        // CORRECCIÓN 1: Dirección Forzada. 
-        // Si el ángulo me empuja a la derecha (>0), la curva debe tender a la derecha.
-        // Si me empuja a la izquierda (<0), la curva tiende a la izquierda.
+        // Mantener fluidez orgánica en la curvatura de la rama
         let tendenciaCurva = (this.angulo > -90) ? 1 : -1;
-        if (this.gen === 0) tendenciaCurva = seededRandom() > 0.5 ? 1 : -1; // Tronco es libre
-        
-        // Reducimos el caos de la curvatura para mantener un flujo más coherente
+        if (this.gen === 0) tendenciaCurva = seededRandom() > 0.5 ? 1 : -1; 
         let spreadCurva = params.maxAngle * 0.6; 
         this.curvatura = (tendenciaCurva * rnd(0, spreadCurva)) + ((-90 - this.angulo) * 0.05); 
         
@@ -326,7 +321,6 @@ export class Rama {
 
         if (this.age >= edadBifurcacion + 1.0 && this.gen > 1 && this.gen < params.maxGen - 1 && !this.tieneAccesoria) {
             if (seededRandom() < params.accProb) {
-                // Direccionamos la accesoria lejos del tronco principal
                 let direccion = seededRandom() > 0.5 ? 1 : -1;
                 this.crearHijo(this.angulo + rnd(30, params.maxAngle) * direccion, params, true); 
                 this.tieneAccesoria = true;
@@ -436,18 +430,22 @@ export class Rama {
         this.jointTip.style.display = "block"; 
 
         this.hijos.forEach(hijo => {
-            // CORRECCIÓN 2: Anclaje de Ramas
-            // En lugar de nacer en el centro exacto, usamos el vector Normal (nxMid, nyMid)
-            // para desplazar el nacimiento hacia el borde del tronco, evitando ramas despegadas.
+            // SOLUCIÓN AL CRUCE: 
             if (hijo.esAccesoria) {
-                // Direccionamos el anclaje según hacia dónde apunte el hijo
-                let direccionHijo = (hijo.angulo > this.angulo) ? 1 : -1;
-                hijo.startX = midX + (this.nxMid * rMid * 0.6 * direccionHijo);
-                hijo.startY = midY + (this.nyMid * rMid * 0.6 * direccionHijo);
+                // Para ramas accesorias, calculamos la diferencia de ángulo para saber hacia qué lado desplazarla sutilmente (1-2px)
+                let diff = hijo.angulo - this.angulo;
+                // Normalizar ángulo entre -180 y 180
+                while (diff <= -180) diff += 360;
+                while (diff > 180) diff -= 360;
+                let direccionHijo = (diff > 0) ? 1 : -1;
+                
+                // Desplazamiento muy sutil (20% del radio) para evitar que flote
+                hijo.startX = midX + (this.nxMid * rMid * 0.2 * direccionHijo);
+                hijo.startY = midY + (this.nyMid * rMid * 0.2 * direccionHijo);
             } else {
-                let direccionHijo = (hijo.angulo > this.angulo) ? 1 : -1;
-                hijo.startX = this.endXAct + (this.nxFin * rFin * 0.4 * direccionHijo);
-                hijo.startY = this.endYAct + (this.nyFin * rFin * 0.4 * direccionHijo);
+                // Las bifurcaciones de punta nacen EXACTAMENTE en el centro matemático para que la esfera las oculte
+                hijo.startX = this.endXAct;
+                hijo.startY = this.endYAct;
             }
             hijo.animarYRenderizar(totalWind, tiempoViento, windIntensity, showLeaves, showFlowers);
         });

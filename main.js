@@ -661,8 +661,20 @@ function syncUI(idPanel, idQuick, activado, iconOn, iconOff, textOn, textOff) {
 }
 
 const toggleFondo = () => {
-    const activado = entornoMotor.toggleSky();
-    syncUI('btn-fondo', 'btn-fondo-quick', activado, 'landscape', 'image', 'CIELO: ON', 'CIELO: OFF');
+    // Llama al ciclo y devuelve: 0 (Off), 1 (Normal), 2 (Colorido), 3 (Lluvia)
+    const estado = entornoMotor.ciclarEntorno();
+    
+    let activado = estado !== 0;
+    let textOn = 'CIELO: OFF';
+    let iconOn = 'image'; // Icono por defecto
+    
+    // Asignamos iconos y textos específicos para cada estado
+    if (estado === 1) { textOn = 'CIELO: NORM'; iconOn = 'cloud'; }
+    if (estado === 2) { textOn = 'CIELO: COL'; iconOn = 'palette'; }
+    if (estado === 3) { textOn = 'CIELO: LLUV'; iconOn = 'rainy'; }
+
+    // Usamos iconOn de forma dinámica para que los botones cambien su dibujo
+    syncUI('btn-fondo', 'btn-fondo-quick', activado, iconOn, 'image', textOn, 'CIELO: OFF');
     guardarAjustes();
 };
 

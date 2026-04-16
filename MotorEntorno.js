@@ -33,71 +33,56 @@ export class MotorEntorno {
         
         this.inyectarEstilosAtmosfericos();
         this.construirCielo();
-        this.generarSuelo(); // Llamamos al nuevo generador de horizonte
+        this.generarSuelo(); 
     }
 
-    // --- NUEVO: HORIZONTE Y PASTO ---
+    // --- HORIZONTE Y PASTO CIRCADIANO ---
     generarSuelo() {
         if (!this.domGround) {
             this.domGround = document.createElementNS(SVG_NS, "g");
             this.domGround.setAttribute("id", "capa-suelo");
-            // Lo insertamos justo antes de la maceta para que quede en el fondo
             this.ctx.layerPot.parentNode.insertBefore(this.domGround, this.ctx.layerPot);
         }
 
-        const colorSuelo = "#111814"; // Silueta profunda
-        const colorPasto1 = "#1a261f";
-        const colorPasto2 = "#213328";
+        // Asignamos una clase CSS en lugar de un color fijo para que la animación CSS la controle
+        let html = `<path class="colina-base" d="M -400 30 Q 0 -30 400 30 L 400 250 L -400 250 Z" />`;
 
-        // Curva del horizonte: Colina suave. El centro en y=-25 (arriba de la base del tronco)
-        let html = `<path d="M -400 30 Q 0 -30 400 30 L 400 250 L -400 250 Z" fill="${colorSuelo}" />`;
-
-        // Generar 150 briznas de pasto con perspectiva
         for (let i = 0; i < 150; i++) {
-            let x = (Math.random() - 0.5) * 800; // Distribución a lo ancho
+            let x = (Math.random() - 0.5) * 800; 
             
-            // Calcular la altura Y de la colina en este punto X exacto
             let t = (x + 400) / 800; 
             let curveY = Math.pow(1-t, 2)*30 + 2*(1-t)*t*(-30) + Math.pow(t, 2)*30;
             
-            // Distribuir el pasto desde la colina hacia abajo
             let y = curveY + Math.random() * 120; 
-            
-            // Efecto de perspectiva matemática (crecen al acercarse a la cámara)
             let perspectiva = 1 + (y - curveY) * 0.015; 
             
             let altura = (8 + Math.random() * 12) * perspectiva;
             let grosor = (1.5 + Math.random() * 2) * perspectiva;
             
-            let color = Math.random() > 0.5 ? colorPasto1 : colorPasto2;
-            let inclinacionIni = Math.random() * 16 - 8; // Desorden natural
+            // Asignamos clases alternadas para crear profundidad cromática
+            let clasePasto = Math.random() > 0.5 ? 'pasto-tipo1' : 'pasto-tipo2';
+            let inclinacionIni = Math.random() * 16 - 8; 
 
-            // SVG Path de una sola brizna curvada
             let d = `M 0 0 Q ${grosor} ${-altura/2} ${Math.random()*6-3} ${-altura} Q ${-grosor} ${-altura/2} ${-grosor} 0 Z`;
             
-            // Usamos un grupo (<g>) para la posición estática y rotamos el (<path>) internamente
             html += `<g transform="translate(${x}, ${y})">
-                        <path class="blade" d="${d}" fill="${color}" data-x="${x}" data-tilt="${inclinacionIni}" />
+                        <path class="blade ${clasePasto}" d="${d}" data-x="${x}" data-tilt="${inclinacionIni}" />
                      </g>`;
         }
         this.domGround.innerHTML = html;
         this.blades = this.domGround.querySelectorAll('.blade');
     }
 
-    // --- NUEVO: FÍSICA DE VIENTO EN EL PASTO ---
     animarPasto(tiempo, viento) {
         if (!this.blades) return;
-        const fuerza = viento * 45; // Multiplicador de amplitud
+        const fuerza = viento * 45; 
         
         this.blades.forEach((blade) => {
             const x = parseFloat(blade.getAttribute('data-x'));
             const tilt = parseFloat(blade.getAttribute('data-tilt'));
             
-            // Onda matemática que viaja de izquierda a derecha (usando la posición X)
             const fase = x * 0.015; 
             const ruido = Math.sin(tiempo * 3.5 + fase);
-            
-            // El viento acuesta el pasto constantemente, el ruido añade la ráfaga
             const oscilacion = tilt + (viento * 20) + (ruido * fuerza * 0.6);
             
             blade.setAttribute('transform', `rotate(${oscilacion})`);
@@ -300,6 +285,18 @@ export class MotorEntorno {
 
             body.bg-sky-active .nube.procedural { animation-play-state: running; }
 
+            /* --- ESTILOS DEL HORIZONTE Y PASTO --- */
+            /* Colores Base (Modo Estudio, cuando el cielo está apagado) */
+            .colina-base { fill: #4A6B53; transition: fill 2s ease; }
+            .pasto-tipo1 { fill: #5B8266; transition: fill 2s ease; }
+            .pasto-tipo2 { fill: #689675; transition: fill 2s ease; }
+
+            /* Animaciones de ciclo cuando el cielo está encendido */
+            body.bg-sky-active .colina-base { animation: cicloSuelo ${cicloSegundos}s infinite linear; }
+            body.bg-sky-active .pasto-tipo1 { animation: cicloPasto1 ${cicloSegundos}s infinite linear; }
+            body.bg-sky-active .pasto-tipo2 { animation: cicloPasto2 ${cicloSegundos}s infinite linear; }
+
+            /* --- KEYFRAMES --- */
             @keyframes rotacionCeleste { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 50% { transform: rotate(180deg); } 75% { transform: rotate(270deg); } 100% { transform: rotate(360deg); } }
             @keyframes opacidadLuna { 0%, 35% { opacity: 0; } 45%, 55% { opacity: 0.9; } 65%, 100% { opacity: 0; } }
             
@@ -312,8 +309,30 @@ export class MotorEntorno {
                 0% { transform: translateX(-30vw) scale(var(--scale, 1)); }
                 100% { transform: translateX(120vw) scale(var(--scale, 1)); }
             }
-            
             @keyframes parpadeo { 0% { filter: opacity(0.3); } 100% { filter: opacity(1); } }
+
+            /* Sincronización perfecta del color de la tierra con las horas del día */
+            @keyframes cicloSuelo {
+                0%, 25% { fill: #4A6B53; }     /* Día: Verde Salvia Mediano */
+                35% { fill: #2c3a2f; }         /* Atardecer: Verde Oliva Oscuro */
+                45%, 75% { fill: #111814; }    /* Noche: Casi Negro */
+                85% { fill: #2c3a2f; }         /* Amanecer: Verde Oliva Oscuro */
+                95%, 100% { fill: #4A6B53; }   /* Día */
+            }
+            @keyframes cicloPasto1 {
+                0%, 25% { fill: #5B8266; }     /* Día */
+                35% { fill: #354a3a; } 
+                45%, 75% { fill: #1a261f; }    /* Noche */
+                85% { fill: #354a3a; } 
+                95%, 100% { fill: #5B8266; } 
+            }
+            @keyframes cicloPasto2 {
+                0%, 25% { fill: #689675; }     /* Día */
+                35% { fill: #3d5743; } 
+                45%, 75% { fill: #213328; }    /* Noche */
+                85% { fill: #3d5743; } 
+                95%, 100% { fill: #689675; } 
+            }
         `;
         document.head.appendChild(estilo);
     }

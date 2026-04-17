@@ -16,8 +16,13 @@ export class MotorAudio {
         // Timers y Limitadores
         this.ambientTimeout = null;
         this.zenTimeoutId = null;
-        this.lastPopTime = 0; 
         this.lastWindUpdate = 0; 
+        
+        // --- Genética de Flores (Polifonía y Tipos) ---
+        this.lastPopTime = 0; 
+        this.popPolifonia = 0;
+        this.tiposPop = ['original', 'sordo', 'suave', 'agudo', 'campana'];
+        this.tipoPopActual = 'original'; // Se sobreescribe con la semilla
 
         this.chimeNotes = [1200, 1500, 1800, 2100, 2600, 3200];
         
@@ -31,7 +36,7 @@ export class MotorAudio {
         if (!this.audioCtx) {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             
-            // Canal de SFX con Volumen Maestro Potenciado
+            // Canal de SFX
             this.masterGainSFX = this.audioCtx.createGain();
             this.masterGainSFX.connect(this.audioCtx.destination);
             this.masterGainSFX.gain.value = 0.8; 
@@ -165,25 +170,83 @@ export class MotorAudio {
 
     playPop() {
         if (!this.sfxEnabled || !this.audioCtx || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
-        if (this.audioCtx.currentTime - this.lastPopTime < 0.1) return;
-        this.lastPopTime = this.audioCtx.currentTime;
+        
+        const now = this.audioCtx.currentTime;
+        
+        // GESTOR DE POLIFONÍA: Crea un "arpegio" si nacen muchas flores de golpe
+        if (now - this.lastPopTime < 0.1) {
+            this.popPolifonia++;
+        } else {
+            this.popPolifonia = 0;
+        }
+        this.lastPopTime = now;
+        
+        // Evita estallar los parlantes si nacen más de 6 flores en el mismo instante
+        if (this.popPolifonia > 5) return; 
 
         try {
-            const time = this.audioCtx.currentTime;
+            // Desfase orgánico para convertirlas en arpegio
+            const tiempo = now + (this.popPolifonia * 0.05) + (Math.random() * 0.02);
+
             const osc = this.audioCtx.createOscillator();
             const gain = this.audioCtx.createGain();
-            osc.connect(gain).connect(this.masterGainSFX);
-            osc.type = 'sine';
-            const freq = 600 + Math.random() * 800; 
-            osc.frequency.setValueAtTime(freq, time);
-            osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.1);
+            let filter = null;
+
+            // Escala Pentatónica base
+            const notasPentatonicas = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51];
+            let freqBase = notasPentatonicas[Math.floor(Math.random() * notasPentatonicas.length)];
+
+            // Configuraciones base
+            let oscType = 'sine';
+            let pitchStartMultiplier = 1.4;
+            let pitchDropDuration = 0.04;
+            let volAttack = 0.01;
+            let volDecay = 0.15;
+            let peakVol = 0.25; 
+            let freqMultiplier = 1.0;
+
+            // --- APLICAR EL ADN DEL ÁRBOL ---
+            switch (this.tipoPopActual) {
+                case 'sordo':
+                    freqMultiplier = 0.5; pitchStartMultiplier = 1.2; pitchDropDuration = 0.08; volDecay = 0.2; peakVol = 0.3;
+                    break;
+                case 'suave':
+                    pitchStartMultiplier = 1.02; pitchDropDuration = 0.1; volAttack = 0.08; volDecay = 0.3; peakVol = 0.2;
+                    break;
+                case 'agudo':
+                    freqMultiplier = 2.0; pitchStartMultiplier = 1.6; pitchDropDuration = 0.02; volDecay = 0.08; peakVol = 0.15;
+                    break;
+                case 'campana':
+                    oscType = 'triangle'; pitchStartMultiplier = 1.0; pitchDropDuration = 0; volAttack = 0.01; volDecay = 0.6; peakVol = 0.2;
+                    filter = this.audioCtx.createBiquadFilter();
+                    filter.type = 'lowpass'; filter.frequency.value = freqBase * 1.5;
+                    break;
+            }
+
+            osc.type = oscType;
+            let freqFinal = freqBase * freqMultiplier;
             
-            gain.gain.setValueAtTime(0, time);
-            gain.gain.linearRampToValueAtTime(0.4, time + 0.01); 
-            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15); 
-            
-            osc.start(time); osc.stop(time + 0.15);
-            osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch(e){} };
+            osc.frequency.setValueAtTime(freqFinal * pitchStartMultiplier, tiempo);
+            if (pitchDropDuration > 0) {
+                osc.frequency.exponentialRampToValueAtTime(freqFinal, tiempo + pitchDropDuration);
+            }
+
+            gain.gain.setValueAtTime(0, tiempo);
+            gain.gain.linearRampToValueAtTime(peakVol, tiempo + volAttack); 
+            gain.gain.exponentialRampToValueAtTime(0.001, tiempo + volAttack + volDecay); 
+
+            if (filter) {
+                osc.connect(filter).connect(gain).connect(this.masterGainSFX);
+            } else {
+                osc.connect(gain).connect(this.masterGainSFX);
+            }
+
+            osc.start(tiempo);
+            osc.stop(tiempo + volAttack + volDecay + 0.1);
+
+            osc.onended = () => {
+                try { osc.disconnect(); gain.disconnect(); if (filter) filter.disconnect(); } catch(e){}
+            };
         } catch (e) {}
     }
 
@@ -241,7 +304,6 @@ export class MotorAudio {
         }
     }
 
-    // EL AVE PRECIOSA ORIGINAL RESTAURADA
     playAve(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         const trinos = Math.floor(Math.random() * 3) + 2; 
@@ -267,24 +329,22 @@ export class MotorAudio {
     playAguaCorriendo(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
-        // RIACHUELO: Ruido rosa suave con sweep sutil (Sin helicópteros)
         const noise = this.audioCtx.createBufferSource();
         noise.buffer = this.noiseBuffer;
         noise.loop = true;
 
         const lowpass = this.audioCtx.createBiquadFilter();
         lowpass.type = 'lowpass';
-        lowpass.frequency.value = 800; // Quita el siseo molesto
+        lowpass.frequency.value = 800;
 
         const bandpass = this.audioCtx.createBiquadFilter();
         bandpass.type = 'bandpass';
         bandpass.frequency.value = 400;
         bandpass.Q.value = 1.2;
 
-        // LFO súper lento para simular el cambio de corriente
         const lfo = this.audioCtx.createOscillator();
         lfo.type = 'sine';
-        lfo.frequency.value = 2 + Math.random() * 3; // 2-5Hz, muy tranquilo
+        lfo.frequency.value = 2 + Math.random() * 3; 
         
         const lfoGain = this.audioCtx.createGain();
         lfoGain.gain.value = 200; 
@@ -311,14 +371,16 @@ export class MotorAudio {
     playRana(tiempoActual) {
         if (!this.sfxEnabled || !this.masterGainSFX || this.audioCtx.state !== 'running') return;
         
-        // RANA REAL: Oscilador bajo con envolvente rápida para el "rrribit"
         const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        const filter = this.audioCtx.createBiquadFilter();
+        
         osc.type = 'sawtooth';
         osc.frequency.value = 60 + Math.random() * 20; 
         
         const lfo = this.audioCtx.createOscillator();
         lfo.type = 'triangle'; 
-        lfo.frequency.value = 20 + Math.random() * 5; // 20-25 pulsos
+        lfo.frequency.value = 20 + Math.random() * 5; 
         
         const amGain = this.audioCtx.createGain();
         amGain.gain.value = 0; 
@@ -327,9 +389,8 @@ export class MotorAudio {
         lfoDepth.gain.value = 1.0; 
         lfo.connect(lfoDepth).connect(amGain.gain);
         
-        const filter = this.audioCtx.createBiquadFilter();
-        filter.type = 'bandpass'; 
-        filter.frequency.value = 1000 + Math.random() * 400; // Formante de garganta
+        filter.type = 'peaking'; 
+        filter.frequency.value = 1000 + Math.random() * 400; 
         filter.Q.value = 3.0;
         
         const masterGain = this.audioCtx.createGain();
@@ -343,7 +404,6 @@ export class MotorAudio {
         masterGain.gain.linearRampToValueAtTime(0.8, tiempoActual + duracion - 0.05);
         masterGain.gain.exponentialRampToValueAtTime(0.001, tiempoActual + duracion);
         
-        // Pequeña caída en afinación para el rebote natural
         osc.frequency.exponentialRampToValueAtTime(80 + Math.random() * 30, tiempoActual + duracion);
 
         osc.start(tiempoActual); lfo.start(tiempoActual);
@@ -436,6 +496,10 @@ export class MotorAudio {
         for (let i = 0; i < seedString.length; i++) num += seedString.charCodeAt(i);
         const possibleRoots = [196.00, 220.00, 261.63, 293.66]; 
         this.rootHz = possibleRoots[num % possibleRoots.length];
+        
+        // --- NUEVO: ASIGNACIÓN GENÉTICA DEL POP ---
+        // Al igual que la escala, el tipo de floración es fijo para cada semilla
+        this.tipoPopActual = this.tiposPop[num % this.tiposPop.length];
     }
 
     _playZenNote(time) {
